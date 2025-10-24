@@ -29,9 +29,10 @@ shader_diagnostic :: proc(shader_handle: u32, buffer: []byte) -> (ok: bool)
         fmt.eprintf("Error: compilation of shader failed.\n%s", buffer)
     }
 
-    return
+    return ok
 }
 
+@(require_results)
 shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shader: Shader, ok: bool)
 {
     vertex_shader, fragment_shader: Shader_ID
@@ -118,4 +119,25 @@ shader_use :: proc "contextless" (shader: Shader)
 shader_delete :: proc "contextless" (shader: Shader)
 {
     gl.DeleteShader(shader.id)
+}
+
+shader_uniform_set_int :: proc "contextless" (shader: Shader, name: cstring, value: i32) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(shader.id, name)
+    ok                = uniform_location != -1
+    gl.Uniform1i(uniform_location, value)
+    return ok
+}
+
+shader_uniform_set_float :: proc "contextless" (shader: Shader, name: cstring, value: f32) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(shader.id, name)
+    ok                = uniform_location != -1
+    gl.Uniform1f(uniform_location, value)
+    return ok
+}
+
+shader_uniform_set :: proc{
+    shader_uniform_set_int,
+    shader_uniform_set_float,
 }

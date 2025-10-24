@@ -6,6 +6,7 @@ import "core:math"
 
 import gl "vendor:OpenGL"
 import "vendor:glfw"
+import stbi "vendor:stb/image"
 
 import glw "gl_wrapper"
 
@@ -15,6 +16,31 @@ GL_MINOR_VERSION :: 3
 WINDOW_NAME           :: "Leaning OpenGl"
 WINDOW_DEFAULT_WIDTH  :: 800
 WINDOW_DEFAULT_HEIGHT :: 600
+
+state := struct {
+    percentage: f32
+}{
+    percentage = 0.2
+}
+
+set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
+{
+    gl.Viewport(0, 0, width, height)
+}
+
+process_input :: proc "c" (window_handle: glfw.WindowHandle) 
+{
+    if glfw.GetKey(window_handle, glfw.KEY_ESCAPE) == glfw.PRESS {
+        glfw.SetWindowShouldClose(window_handle, true)
+    }
+    
+    if glfw.GetKey(window_handle, glfw.KEY_DOWN) == glfw.PRESS {
+        state.percentage -= 0.001
+    }
+    else if glfw.GetKey(window_handle, glfw.KEY_UP) == glfw.PRESS {
+        state.percentage += 0.001
+    }
+}
 
 main :: proc() 
 {
@@ -41,6 +67,7 @@ main :: proc()
         return
     }
 
+
     glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, GL_MAJOR_VERSION)
     glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, GL_MINOR_VERSION)
     glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -53,33 +80,75 @@ main :: proc()
     gl.Viewport(0, 0, WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT)
     gl.ClearColor(0.2, 0.3, 0.3, 1.0)
 
-
-    // uniform_name: cstring  = "ourColor"
-    // vertex_color_location := gl.GetUniformLocation(shader_program, uniform_name)
-    // if vertex_color_location == -1 {
-    //     fmt.eprintfln("Error: could not retrieve uniform of name '%v'", uniform_name)
-    //     return
-    // }
-
-    // gl.UseProgram(shader_program)
-    shader, ok := glw.shader_create("res/vs_basic.glsl", "res/fs_basic.glsl")
+    shader, ok := glw.shader_create("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl")
     if !ok {
         return
     }
     glw.shader_use(shader)
 
-    number_of_attributes :: 2
-    values_per_attribute :: 3
     vertices := [?]f32{
-        // positions         // colors
-         0.5, -0.5, 0.0,  1.0, 0.0, 0.0,   // bottom right
-        -0.5, -0.5, 0.0,  0.0, 1.0, 0.0,   // bottom let
-         0.0,  0.5, 0.0,  0.0, 0.0, 1.0    // top
+        // positions       // colors        // texture coords
+         0.5,  0.5, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   // top right
+         0.5, -0.5, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   // bottom right
+        -0.5, -0.5, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   // bottom lett
+        -0.5,  0.5, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0    // top left
     }
 
     vertex_indices := [?]u32{
-        0, 1, 2
+        0, 1, 3,
+        3, 2, 1
     }
+
+    // texture_coordinates := [?]f32{
+    //     0.0, 0.0,  // lower-left corner  
+    //     1.0, 0.0,  // lower-right corner
+    //     0.5, 1.0 
+    // }
+    stbi.set_flip_vertically_on_load(c.int(true))
+
+    image_name: cstring = "res/images/container.jpg";
+    width, height, number_of_channels: c.int = ---, ---, ---
+    data := stbi.load(image_name, &width, &height, &number_of_channels, 0)
+    if data == nil {
+        fmt.eprintfln("Could not load %v", image_name)
+        return
+    }
+    // defer stbi.image_free(data) // Leaking is fine, let OS clean stuff
+
+    texture: u32 = ---
+    gl.GenTextures(1, &texture)
+    // gl.ActiveTexture(gl.TEXTURE0) // Default texture unit
+    gl.BindTexture(gl.TEXTURE_2D, texture)
+
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.MIRRORED_REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.MIRRORED_REPEAT);
+
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data)
+    gl.GenerateMipmap(gl.TEXTURE_2D)
+
+    image_name = "res/images/awesomeface.png"
+    data = stbi.load(image_name, &width, &height, &number_of_channels, 0)
+    if data == nil {
+        fmt.eprintfln("Could not load %v", image_name)
+        return
+    }
+
+    gl.GenTextures(1, &texture)
+    gl.ActiveTexture(gl.TEXTURE1)
+    gl.BindTexture(gl.TEXTURE_2D, texture)
+
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.REPEAT);
+    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.REPEAT);
+
+    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data)
+    gl.GenerateMipmap(gl.TEXTURE_2D)
+
+    glw.shader_uniform_set(shader, "texture1", 0)
+    glw.shader_uniform_set(shader, "texture2", 1)
 
     vao, vbo, ebo: u32 = ---, ---, ---
     gl.GenVertexArrays(1, &vao)
@@ -101,39 +170,24 @@ main :: proc()
     gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
     gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(vertex_indices), &vertex_indices, gl.STATIC_DRAW)
 
-    gl.VertexAttribPointer(0, values_per_attribute, gl.FLOAT, gl.FALSE, number_of_attributes * values_per_attribute * size_of(f32), 0)
+    stride :: 8 * size_of(f32)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
     gl.EnableVertexAttribArray(0)
 
-    gl.VertexAttribPointer(1, values_per_attribute, gl.FLOAT, gl.FALSE, number_of_attributes * values_per_attribute * size_of(f32), 3 * size_of(f32))
+    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     gl.EnableVertexAttribArray(1)
-    // number_of_attributes: i32 = ---
-    // gl.GetIntegerv(gl.MAX_VERTEX_ATTRIBS, &number_of_attributes)
-    // fmt.printfln("Max number of attributes: %v", number_of_attributes)
+
+    gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, stride, 6 * size_of(f32))
+    gl.EnableVertexAttribArray(2)
 
     for !glfw.WindowShouldClose(window_handle) {
         gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
-        // time        := glfw.GetTime()
-        // green_value := f32(math.sin(time / 2)) + 0.5
-        // gl.Uniform4f(vertex_color_location, 0, green_value, 0, 1)
-
-        gl.DrawElements(gl.TRIANGLES, 3, gl.UNSIGNED_INT, nil)
-
+        glw.shader_uniform_set(shader, "u_percent", state.percentage)
         process_input(window_handle)
 
         glfw.PollEvents()
         glfw.SwapBuffers(window_handle)
-    }
-}
-
-set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
-{
-    gl.Viewport(0, 0, width, height)
-}
-
-process_input :: proc "c" (window_handle: glfw.WindowHandle) 
-{
-    if glfw.GetKey(window_handle, glfw.KEY_ESCAPE) == glfw.PRESS {
-        glfw.SetWindowShouldClose(window_handle, true)
     }
 }
