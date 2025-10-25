@@ -7,12 +7,14 @@ import "core:math/linalg"
 
 import gl "vendor:OpenGL"
 
-Shader_ID :: u32
+Handle :: u32
 
 Shader :: struct
 {
-    id: Shader_ID,
+    id: Handle,
 }
+
+current_shader: Shader
 
 shader_diagnostic :: proc(shader_handle: u32, buffer: []byte) -> (ok: bool)
 {
@@ -38,7 +40,7 @@ shader_diagnostic :: proc(shader_handle: u32, buffer: []byte) -> (ok: bool)
 @(require_results)
 shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shader: Shader, ok: bool)
 {
-    vertex_shader, fragment_shader: Shader_ID
+    vertex_shader, fragment_shader: Handle
     file, err := os.open(vertex_shader_path)
     {
         defer os.close(file)
@@ -61,7 +63,7 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     }
 
     buffer: [256]byte = ---
-    fmt.print("Diagnostics for vertex shader:\n\t")
+    fmt.printf("Diagnostics for %v:\n\t", vertex_shader_path)
     shader_diagnostic(vertex_shader, buffer[:]) or_return
 
     file, err = os.open(fragment_shader_path)
@@ -86,7 +88,7 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     }
 
     // fmt.printfln("%v", buffer)
-    fmt.print("Diagnostics for fragment shader:\n\t")
+    fmt.printf("Diagnostics for %v:\n\t", fragment_shader_path)
     shader_diagnostic(fragment_shader, buffer[:]) or_return
 
     shader.id = gl.CreateProgram()
@@ -117,6 +119,7 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
 shader_use :: proc "contextless" (shader: Shader)
 {
     gl.UseProgram(shader.id)
+    current_shader = shader
 }
 
 shader_delete :: proc "contextless" (shader: Shader)
@@ -124,25 +127,33 @@ shader_delete :: proc "contextless" (shader: Shader)
     gl.DeleteShader(shader.id)
 }
 
-shader_uniform_set_int :: proc "contextless" (shader: Shader, name: cstring, value: i32) -> (ok: bool)
+shader_uniform_set_int :: proc "contextless" (name: cstring, value: i32) -> (ok: bool)
 {
-    uniform_location := gl.GetUniformLocation(shader.id, name)
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
     gl.Uniform1i(uniform_location, value)
     return ok
 }
 
-shader_uniform_set_float :: proc "contextless" (shader: Shader, name: cstring, value: f32) -> (ok: bool)
+shader_uniform_set_float :: proc "contextless" (name: cstring, value: f32) -> (ok: bool)
 {
-    uniform_location := gl.GetUniformLocation(shader.id, name)
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
     gl.Uniform1f(uniform_location, value)
     return ok
 }
 
-shader_uniform_set_matrix4 :: proc "contextless" (shader: Shader, name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
+shader_uniform_set_vec3 :: proc "contextless" (name: cstring, value: linalg.Vector3f32) -> (ok: bool)
 {
-    uniform_location := gl.GetUniformLocation(shader.id, name)
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
+    ok                = uniform_location != -1
+    gl.Uniform3f(uniform_location, value.x, value.y, value.z)
+    return ok
+}
+
+shader_uniform_set_matrix4 :: proc "contextless" (name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
     gl.UniformMatrix4fv(uniform_location, 1, gl.FALSE, &value[0, 0])
     return ok
@@ -152,5 +163,6 @@ shader_uniform_set :: proc
 {
     shader_uniform_set_int,
     shader_uniform_set_float,
+    shader_uniform_set_vec3,
     shader_uniform_set_matrix4, 
 }

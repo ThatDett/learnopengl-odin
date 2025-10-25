@@ -32,6 +32,12 @@ Dimensions :: struct
     width, height: f32
 }
 
+Movement_Mode :: enum
+{
+    walk,
+    fly
+}
+
 Camera :: struct
 {
     using position: linalg.Vector3f32,
@@ -39,6 +45,8 @@ Camera :: struct
     direction:      linalg.Vector3f32,
     up:             linalg.Vector3f32,
     right:          linalg.Vector3f32,
+
+    movement_mode: Movement_Mode,
     
     fov:   f32,
     speed: f32,
@@ -116,11 +124,17 @@ process_input :: proc "c" (window_handle: glfw.WindowHandle)
     }
 
     camera_speed := global.camera.speed * f32(global.dt)
+    direction    := global.camera.direction
+    if (global.camera.movement_mode == Movement_Mode.fly)
+    {
+        direction = linalg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
+    }
+
     if glfw.GetKey(window_handle, glfw.KEY_W) == glfw.PRESS {
-        global.camera.position += camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
+        global.camera.position += camera_speed * direction
     }
     if glfw.GetKey(window_handle, glfw.KEY_S) == glfw.PRESS {
-        global.camera.position -= camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
+        global.camera.position -= camera_speed * direction
     }
     if glfw.GetKey(window_handle, glfw.KEY_D) == glfw.PRESS {
         global.camera.position += camera_speed * linalg.normalize(linalg.cross(global.camera.direction, global.camera.up))
@@ -171,55 +185,65 @@ main :: proc()
 
     gl.Viewport(0, 0, i32(global.viewport_size.width), i32(global.viewport_size.height))
     gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+    
+    ok: bool = ---
 
-    shader, ok := glw.shader_create("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl")
+    lighting_shader, light_source_shader: glw.Shader = ---, ---
+    lighting_shader, ok = glw.shader_create("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl")
     if !ok {
         return
     }
-    glw.shader_use(shader)
+    
+    glw.shader_use(lighting_shader)
+    glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
+    glw.shader_uniform_set_vec3("light_color",  {1, 1, 1})
+
+    light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
+
+    light_pos := linalg.Vector3f32{1.2, 0, 2}
 
     vertices := [?]f32{
-        -0.5, -0.5, -0.5,  0.0, 0.0,
-         0.5, -0.5, -0.5,  1.0, 0.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 0.0,
+        -0.5, -0.5, -0.5, // 0.0, 0.0,
+         0.5, -0.5, -0.5, // 1.0, 0.0,
+         0.5,  0.5, -0.5, // 1.0, 1.0,
+         0.5,  0.5, -0.5, // 1.0, 1.0,
+        -0.5,  0.5, -0.5, // 0.0, 1.0,
+        -0.5, -0.5, -0.5, // 0.0, 0.0,
 
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 1.0,
-         0.5,  0.5,  0.5,  1.0, 1.0,
-        -0.5,  0.5,  0.5,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5, -0.5,  0.5, // 0.0, 0.0,
+         0.5, -0.5,  0.5, // 1.0, 0.0,
+         0.5,  0.5,  0.5, // 1.0, 1.0,
+         0.5,  0.5,  0.5, // 1.0, 1.0,
+        -0.5,  0.5,  0.5, // 0.0, 1.0,
+        -0.5, -0.5,  0.5, // 0.0, 0.0,
 
-        -0.5,  0.5,  0.5,  1.0, 0.0,
-        -0.5,  0.5, -0.5,  1.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-        -0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5,  0.5, // 1.0, 0.0,
+        -0.5,  0.5, -0.5, // 1.0, 1.0,
+        -0.5, -0.5, -0.5, // 0.0, 1.0,
+        -0.5, -0.5, -0.5, // 0.0, 1.0,
+        -0.5, -0.5,  0.5, // 0.0, 0.0,
+        -0.5,  0.5,  0.5, // 1.0, 0.0,
 
-         0.5,  0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5,  0.5,  0.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5, // 1.0, 0.0,
+         0.5,  0.5, -0.5, // 1.0, 1.0,
+         0.5, -0.5, -0.5, // 0.0, 1.0,
+         0.5, -0.5, -0.5, // 0.0, 1.0,
+         0.5, -0.5,  0.5, // 0.0, 0.0,
+         0.5,  0.5,  0.5, // 1.0, 0.0,
 
-        -0.5, -0.5, -0.5,  0.0, 1.0,
-         0.5, -0.5, -0.5,  1.0, 1.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-         0.5, -0.5,  0.5,  1.0, 0.0,
-        -0.5, -0.5,  0.5,  0.0, 0.0,
-        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5, // 0.0, 1.0,
+         0.5, -0.5, -0.5, // 1.0, 1.0,
+         0.5, -0.5,  0.5, // 1.0, 0.0,
+         0.5, -0.5,  0.5, // 1.0, 0.0,
+        -0.5, -0.5,  0.5, // 0.0, 0.0,
+        -0.5, -0.5, -0.5, // 0.0, 1.0,
 
-        -0.5,  0.5, -0.5,  0.0, 1.0,
-         0.5,  0.5, -0.5,  1.0, 1.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-         0.5,  0.5,  0.5,  1.0, 0.0,
-        -0.5,  0.5,  0.5,  0.0, 0.0,
-        -0.5,  0.5, -0.5,  0.0, 1.0
+        -0.5,  0.5, -0.5, // 0.0, 1.0,
+         0.5,  0.5, -0.5, // 1.0, 1.0,
+         0.5,  0.5,  0.5, // 1.0, 0.0,
+         0.5,  0.5,  0.5, // 1.0, 0.0,
+        -0.5,  0.5,  0.5, // 0.0, 0.0,
+        -0.5,  0.5, -0.5, // 0.0, 1.0
     }
 
     cube_positions := [?]linalg.Vector3f32{
@@ -251,18 +275,18 @@ main :: proc()
     }
     // defer stbi.image_free(data) // Leaking is fine, let OS clean stuff
 
-    texture: u32 = ---
-    gl.GenTextures(1, &texture)
+    // texture: u32 = ---
+    // gl.GenTextures(1, &texture)
     // gl.ActiveTexture(gl.TEXTURE0) // Default texture unit
-    gl.BindTexture(gl.TEXTURE_2D, texture)
+    // gl.BindTexture(gl.TEXTURE_2D, texture)
 
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.MIRRORED_REPEAT);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.MIRRORED_REPEAT);
-
-    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data)
-    gl.GenerateMipmap(gl.TEXTURE_2D)
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.MIRRORED_REPEAT);
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.MIRRORED_REPEAT);
+    //
+    // gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data)
+    // gl.GenerateMipmap(gl.TEXTURE_2D)
 
     image_name = "res/images/awesomeface.png"
     data       = stbi.load(image_name, &width, &height, &number_of_channels, 0)
@@ -271,32 +295,42 @@ main :: proc()
         return
     }
 
-    gl.GenTextures(1, &texture)
-    gl.ActiveTexture(gl.TEXTURE1)
-    gl.BindTexture(gl.TEXTURE_2D, texture)
+    // gl.GenTextures(1, &texture)
+    // gl.ActiveTexture(gl.TEXTURE1)
+    // gl.BindTexture(gl.TEXTURE_2D, texture)
+    //
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.REPEAT);
+    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.REPEAT);
+    //
+    // gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data)
+    // gl.GenerateMipmap(gl.TEXTURE_2D)
+    //
+    // glw.shader_uniform_set(lighting_shader, "texture1", 0)
+    // glw.shader_uniform_set(lighting_shader, "texture2", 1)
 
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.REPEAT);
-    gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.REPEAT);
-
-    gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data)
-    gl.GenerateMipmap(gl.TEXTURE_2D)
-
-    glw.shader_uniform_set(shader, "texture1", 0)
-    glw.shader_uniform_set(shader, "texture2", 1)
-
-    vao, vbo, ebo: u32 = ---, ---, ---
+    light_vao, vao, vbo, ebo: glw.Handle = ---, ---, ---, ---
+    gl.GenVertexArrays(1, &light_vao)
     gl.GenVertexArrays(1, &vao)
     gl.GenBuffers(1, &vbo)
     gl.GenBuffers(1, &ebo)
 
     defer {
+        gl.DeleteVertexArrays(1, &light_vao)
         gl.DeleteVertexArrays(1, &vao)
         gl.DeleteBuffers(1, &vbo)
         gl.DeleteBuffers(1, &ebo)
-        glw.shader_delete(shader)
+        glw.shader_delete(lighting_shader)
+        glw.shader_delete(light_source_shader)
     }
+
+    gl.BindVertexArray(light_vao)
+    gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+
+    stride: i32 = 3 * size_of(f32)
+    gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
+    gl.EnableVertexAttribArray(0)
 
     gl.BindVertexArray(vao)
 
@@ -306,16 +340,16 @@ main :: proc()
     // gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
     // gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(vertex_indices), &vertex_indices, gl.STATIC_DRAW)
 
-    stride :: 5 * size_of(f32)
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
     gl.EnableVertexAttribArray(0)
 
     // gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     // gl.EnableVertexAttribArray(1)
 
-    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
-    gl.EnableVertexAttribArray(1)
+    // gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
+    // gl.EnableVertexAttribArray(1)
 
+    model_mat:      linalg.Matrix4x4f32 = --- 
     view_mat:       linalg.Matrix4x4f32 = --- 
     projection_mat: linalg.Matrix4x4f32 = --- 
 
@@ -338,6 +372,11 @@ main :: proc()
         scroll_sensitivity = 3
     }
     
+    // model_mat = linalg.MATRIX4F32_IDENTITY
+    draw_cube :: proc()
+    {
+        gl.DrawArrays(gl.TRIANGLES, 0, 36)
+    }
 
     last_frame: f64
     for !glfw.WindowShouldClose(window_handle) {
@@ -357,18 +396,32 @@ main :: proc()
                 0.1, 
                 100
             )
-
-            glw.shader_uniform_set(shader, "view", &view_mat)
-            glw.shader_uniform_set(shader, "projection", &projection_mat)
         }
 
-        for cube_position, i in cube_positions {
-            model := linalg.MATRIX4F32_IDENTITY
-            model = linalg.matrix4_translate_f32(cube_position) * model
-            glw.shader_uniform_set(shader, "model", &model)
+        model_mat = linalg.MATRIX4F32_IDENTITY
+        model_mat = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+        gl.BindVertexArray(vao)
+        glw.shader_use(lighting_shader)
+        glw.shader_uniform_set("model",      &model_mat)
+        glw.shader_uniform_set("view",       &view_mat)
+        glw.shader_uniform_set("projection", &projection_mat)
+        draw_cube()
 
-            gl.DrawArrays(gl.TRIANGLES, 0, 36)
-        }
+        model_mat = linalg.matrix4_translate(light_pos) * model_mat
+        gl.BindVertexArray(light_vao)
+        glw.shader_use(light_source_shader)
+        glw.shader_uniform_set("model",      &model_mat)
+        glw.shader_uniform_set("view",       &view_mat)
+        glw.shader_uniform_set("projection", &projection_mat)
+        draw_cube()
+
+        // for cube_position, i in cube_positions {
+        //     model := linalg.MATRIX4F32_IDENTITY
+        //     model = linalg.matrix4_translate_f32(cube_position) * model
+        //     glw.shader_uniform_set(lighting_shader, "model", &model)
+        //
+        //     gl.DrawArrays(gl.TRIANGLES, 0, 36)
+        // }
 
         // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
