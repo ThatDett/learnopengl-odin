@@ -14,9 +14,8 @@ import glw "gl_wrapper"
 GL_MAJOR_VERSION :: 3
 GL_MINOR_VERSION :: 3
 
-WINDOW_NAME           :: "Leaning OpenGl"
-WINDOW_DEFAULT_WIDTH  :: 800
-WINDOW_DEFAULT_HEIGHT :: 600
+WINDOW_NAME         :: "Leaning OpenGl"
+WINDOW_DEFAULT_SIZE :: Dimensions{1280, 720}
 
 Dimensions :: struct
 {
@@ -28,7 +27,8 @@ global := struct
     viewport_size: Dimensions,
     percentage:    f32,
 }{
-    percentage = 0.2
+    percentage    = 0.2,
+    viewport_size = WINDOW_DEFAULT_SIZE,
 }
 
 set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
@@ -59,12 +59,14 @@ main :: proc()
     }
 
     window_handle := glfw.CreateWindow(
-        WINDOW_DEFAULT_WIDTH,
-        WINDOW_DEFAULT_HEIGHT,
+        i32(global.viewport_size.width),
+        i32(global.viewport_size.height),
         WINDOW_NAME,
         nil,
         nil,
     )
+
+    glfw.SetWindowPos(window_handle, 0, 32)
 
     defer {
         glfw.Terminate()
@@ -86,7 +88,7 @@ main :: proc()
 
     glfw.SetFramebufferSizeCallback(window_handle, set_framebuffer_size_callback)
 
-    gl.Viewport(0, 0, WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT)
+    gl.Viewport(0, 0, i32(global.viewport_size.width), i32(global.viewport_size.height))
     gl.ClearColor(0.2, 0.3, 0.3, 1.0)
 
     shader, ok := glw.shader_create("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl")
@@ -96,11 +98,60 @@ main :: proc()
     glw.shader_use(shader)
 
     vertices := [?]f32{
-        // positions       // colors        // texture coords
-         0.5,  0.5, 0.0,   1.0, 0.0, 0.0,   1.0, 1.0,   // top right
-         0.5, -0.5, 0.0,   0.0, 1.0, 0.0,   1.0, 0.0,   // bottom right
-        -0.5, -0.5, 0.0,   0.0, 0.0, 1.0,   0.0, 0.0,   // bottom lett
-        -0.5,  0.5, 0.0,   1.0, 1.0, 0.0,   0.0, 1.0    // top left
+        -0.5, -0.5, -0.5,  0.0, 0.0,
+         0.5, -0.5, -0.5,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+        -0.5,  0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 0.0,
+
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 1.0,
+         0.5,  0.5,  0.5,  1.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+
+        -0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5, -0.5,  1.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5,  0.5,  0.5,  1.0, 0.0,
+
+         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5,  0.5,  0.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+         0.5, -0.5, -0.5,  1.0, 1.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+         0.5, -0.5,  0.5,  1.0, 0.0,
+        -0.5, -0.5,  0.5,  0.0, 0.0,
+        -0.5, -0.5, -0.5,  0.0, 1.0,
+
+        -0.5,  0.5, -0.5,  0.0, 1.0,
+         0.5,  0.5, -0.5,  1.0, 1.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0, 0.0,
+        -0.5,  0.5,  0.5,  0.0, 0.0,
+        -0.5,  0.5, -0.5,  0.0, 1.0
+    }
+
+    cube_positions := [?]linalg.Vector3f32{
+        { 0.0,  0.0,  0.0, },
+        { 2.0,  5.0, -15.0,}, 
+        {-1.5, -2.2, -2.5, }, 
+        {-3.8, -2.0, -12.3,},  
+        { 2.4, -0.4, -3.5, }, 
+        {-1.7,  3.0, -7.5, }, 
+        { 1.3, -2.0, -2.5, }, 
+        { 1.5,  2.0, -2.5, },
+        { 1.5,  0.2, -1.5, },
+        {-1.3,  1.0, -1.5  },
     }
 
     vertex_indices := [?]u32{
@@ -108,11 +159,6 @@ main :: proc()
         3, 2, 1
     }
 
-    // texture_coordinates := [?]f32{
-    //     0.0, 0.0,  // lower-left corner  
-    //     1.0, 0.0,  // lower-right corner
-    //     0.5, 1.0 
-    // }
     stbi.set_flip_vertically_on_load(c.int(true))
 
     image_name: cstring = "res/images/container.jpg";
@@ -176,18 +222,18 @@ main :: proc()
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
     gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices), &vertices, gl.STATIC_DRAW)
 
-    gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
-    gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(vertex_indices), &vertex_indices, gl.STATIC_DRAW)
+    // gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
+    // gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(vertex_indices), &vertex_indices, gl.STATIC_DRAW)
 
-    stride :: 8 * size_of(f32)
+    stride :: 5 * size_of(f32)
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
     gl.EnableVertexAttribArray(0)
 
-    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
-    gl.EnableVertexAttribArray(1)
+    // gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
+    // gl.EnableVertexAttribArray(1)
 
-    gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, stride, 6 * size_of(f32))
-    gl.EnableVertexAttribArray(2)
+    gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
+    gl.EnableVertexAttribArray(1)
 
     // vec            := linalg.Vector4f32{1, 0, 0, 1}
     // transformation := linalg.matrix4_translate_f32({0.5, -0.5, 0})
@@ -196,35 +242,37 @@ main :: proc()
     // vec            = transformation * vec
 
     // glw.shader_uniform_set(shader, "u_transform", &transformation)
-    model_mat      := linalg.MATRIX4F32_IDENTITY
-    view_mat       := linalg.MATRIX4F32_IDENTITY
+    // model_mat      := linalg.MATRIX4F32_IDENTITY
+    view_mat       := linalg.matrix4_translate_f32({0, 0, -6})
     projection_mat := linalg.matrix4_perspective_f32(math.to_radians_f32(45), global.viewport_size.width / global.viewport_size.height, 0.1, 100)
 
+    glw.shader_uniform_set(shader, "view",       &view_mat)
+    glw.shader_uniform_set(shader, "projection", &projection_mat)
+
+    gl.Enable(gl.DEPTH_TEST)
     for !glfw.WindowShouldClose(window_handle) {
-        gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
         glw.shader_uniform_set(shader, "u_percent", global.percentage)
 
-        transformation := linalg.MATRIX4F32_IDENTITY
-        scalar         := f32(math.sin(glfw.GetTime() * 3) + 1) / 2
-        transformation = linalg.matrix4_scale_f32({1, 1, 1} * scalar) * transformation
-        // transformation = linalg.matrix4_rotate_f32(f32(glfw.GetTime()), {0, 0 ,1}) * transformation
-        transformation = linalg.matrix4_translate_f32({-0.5, 0.5, 0})              * transformation
-        glw.shader_uniform_set(shader, "u_transform", &transformation)
+        // model_mat := linalg.matrix4_rotate_f32(math.to_radians_f32(50) * f32(glfw.GetTime()), {0.5, 1, 0})
+        // glw.shader_uniform_set(shader, "model",      &model_mat)
 
-        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+        for cube_position, i in cube_positions {
+            model := linalg.MATRIX4F32_IDENTITY
+            if i % 3 == 0 {
+                model  = linalg.matrix4_rotate_f32(f32(math.to_radians(glfw.GetTime() * f64(25 * i))), {1, 0.3, 0.5}) * model
+            }
+            model = linalg.matrix4_translate_f32(cube_position) * model
+            glw.shader_uniform_set(shader, "model", &model)
 
-        transformation = linalg.MATRIX4F32_IDENTITY
-        transformation = linalg.matrix4_scale_f32({0.5, 0.5, 0.5})                 * transformation
-        transformation = linalg.matrix4_rotate_f32(f32(glfw.GetTime()), {0, 0 ,1}) * transformation
-        transformation = linalg.matrix4_translate_f32({0.5, -0.5, 0})              * transformation
+            gl.DrawArrays(gl.TRIANGLES, 0, 36)
+        }
 
-        glw.shader_uniform_set(shader, "u_transform", &transformation)
-
-        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+        // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
         process_input(window_handle)
 
-        glfw.PollEvents()
         glfw.SwapBuffers(window_handle)
+        glfw.PollEvents()
     }
 }
