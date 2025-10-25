@@ -2,6 +2,9 @@ package gl_wrapper
 
 import "core:os"
 import "core:fmt"
+import "core:math"
+import "core:math/linalg"
+
 import gl "vendor:OpenGL"
 
 Shader_ID :: u32
@@ -137,7 +140,17 @@ shader_uniform_set_float :: proc "contextless" (shader: Shader, name: cstring, v
     return ok
 }
 
-shader_uniform_set :: proc{
+shader_uniform_set_matrix4 :: proc "contextless" (shader: Shader, name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(shader.id, name)
+    ok                = uniform_location != -1
+    gl.UniformMatrix4fv(uniform_location, 1, gl.FALSE, &value[0, 0])
+    return ok
+}
+
+shader_uniform_set :: proc
+{
     shader_uniform_set_int,
     shader_uniform_set_float,
+    shader_uniform_set_matrix4, 
 }

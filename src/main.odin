@@ -3,6 +3,7 @@ package learn_opengl
 import "core:c"
 import "core:fmt"
 import "core:math"
+import "core:math/linalg"
 
 import gl "vendor:OpenGL"
 import "vendor:glfw"
@@ -17,14 +18,22 @@ WINDOW_NAME           :: "Leaning OpenGl"
 WINDOW_DEFAULT_WIDTH  :: 800
 WINDOW_DEFAULT_HEIGHT :: 600
 
-state := struct {
-    percentage: f32
+Dimensions :: struct
+{
+    width, height: f32
+}
+
+global := struct
+{
+    viewport_size: Dimensions,
+    percentage:    f32,
 }{
     percentage = 0.2
 }
 
 set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
 {
+    global.viewport_size = {f32(width), f32(height)}
     gl.Viewport(0, 0, width, height)
 }
 
@@ -35,10 +44,10 @@ process_input :: proc "c" (window_handle: glfw.WindowHandle)
     }
     
     if glfw.GetKey(window_handle, glfw.KEY_DOWN) == glfw.PRESS {
-        state.percentage -= 0.001
+        global.percentage -= 0.001
     }
     else if glfw.GetKey(window_handle, glfw.KEY_UP) == glfw.PRESS {
-        state.percentage += 0.001
+        global.percentage += 0.001
     }
 }
 
@@ -180,11 +189,39 @@ main :: proc()
     gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, stride, 6 * size_of(f32))
     gl.EnableVertexAttribArray(2)
 
+    // vec            := linalg.Vector4f32{1, 0, 0, 1}
+    // transformation := linalg.matrix4_translate_f32({0.5, -0.5, 0})
+    // transformation = linalg.matrix4_rotate_f32(math.PI / 2, {0, 0 ,1})
+    // transformation = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * transformation
+    // vec            = transformation * vec
+
+    // glw.shader_uniform_set(shader, "u_transform", &transformation)
+    model_mat      := linalg.MATRIX4F32_IDENTITY
+    view_mat       := linalg.MATRIX4F32_IDENTITY
+    projection_mat := linalg.matrix4_perspective_f32(math.to_radians_f32(45), global.viewport_size.width / global.viewport_size.height, 0.1, 100)
+
     for !glfw.WindowShouldClose(window_handle) {
         gl.Clear(gl.COLOR_BUFFER_BIT)
+        glw.shader_uniform_set(shader, "u_percent", global.percentage)
+
+        transformation := linalg.MATRIX4F32_IDENTITY
+        scalar         := f32(math.sin(glfw.GetTime() * 3) + 1) / 2
+        transformation = linalg.matrix4_scale_f32({1, 1, 1} * scalar) * transformation
+        // transformation = linalg.matrix4_rotate_f32(f32(glfw.GetTime()), {0, 0 ,1}) * transformation
+        transformation = linalg.matrix4_translate_f32({-0.5, 0.5, 0})              * transformation
+        glw.shader_uniform_set(shader, "u_transform", &transformation)
+
         gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
-        glw.shader_uniform_set(shader, "u_percent", state.percentage)
+        transformation = linalg.MATRIX4F32_IDENTITY
+        transformation = linalg.matrix4_scale_f32({0.5, 0.5, 0.5})                 * transformation
+        transformation = linalg.matrix4_rotate_f32(f32(glfw.GetTime()), {0, 0 ,1}) * transformation
+        transformation = linalg.matrix4_translate_f32({0.5, -0.5, 0})              * transformation
+
+        glw.shader_uniform_set(shader, "u_transform", &transformation)
+
+        gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+
         process_input(window_handle)
 
         glfw.PollEvents()
