@@ -37,7 +37,6 @@ Camera :: struct
     using position: linalg.Vector3f32,
     target:         linalg.Vector3f32,
     direction:      linalg.Vector3f32,
-    front:          linalg.Vector3f32,
     up:             linalg.Vector3f32,
     right:          linalg.Vector3f32,
     
@@ -91,8 +90,8 @@ mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: 
         global.first_call = false
     }
     delta_position := type_of(position){
-        position.x - previous_position.x,
-      -(position.y - previous_position.y)
+        x - previous_position.x,
+      -(y - previous_position.y)
     }
 
     delta_position      *= sensitivity
@@ -106,7 +105,7 @@ mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: 
         math.sin(math.to_radians(global.camera.yaw)) * math.cos(math.to_radians(global.camera.pitch)),
     }
 
-    global.camera.front = linalg.normalize(global.camera.direction)
+    global.camera.direction = linalg.normalize(global.camera.direction)
     previous_position   = position
 }
 
@@ -118,16 +117,16 @@ process_input :: proc "c" (window_handle: glfw.WindowHandle)
 
     camera_speed := global.camera.speed * f32(global.dt)
     if glfw.GetKey(window_handle, glfw.KEY_W) == glfw.PRESS {
-        global.camera.position += camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.front.x, 0, global.camera.front.z})
+        global.camera.position += camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
     }
     if glfw.GetKey(window_handle, glfw.KEY_S) == glfw.PRESS {
-        global.camera.position -= camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.front.x, 0, global.camera.front.z})
+        global.camera.position -= camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
     }
     if glfw.GetKey(window_handle, glfw.KEY_D) == glfw.PRESS {
-        global.camera.position += camera_speed * linalg.normalize(linalg.cross(global.camera.front, global.camera.up))
+        global.camera.position += camera_speed * linalg.normalize(linalg.cross(global.camera.direction, global.camera.up))
     }
     if glfw.GetKey(window_handle, glfw.KEY_A) == glfw.PRESS {
-        global.camera.position -= camera_speed * linalg.normalize(linalg.cross(global.camera.front, global.camera.up))
+        global.camera.position -= camera_speed * linalg.normalize(linalg.cross(global.camera.direction, global.camera.up))
     }
 }
 
@@ -317,7 +316,8 @@ main :: proc()
     gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     gl.EnableVertexAttribArray(1)
 
-    view_mat       := linalg.MATRIX4F32_IDENTITY
+    view_mat:       linalg.Matrix4x4f32 = --- 
+    projection_mat: linalg.Matrix4x4f32 = --- 
 
     gl.Enable(gl.DEPTH_TEST)
 
@@ -348,11 +348,17 @@ main :: proc()
         gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
         {
             using global.camera
-            right     = linalg.normalize(linalg.cross(UP, direction))
-            up        = linalg.cross(direction, right) // Inputs are already normalized
-            view_mat  = linalg.matrix4_look_at_f32(position, position + front, up)
+            right          = linalg.normalize(linalg.cross(UP, direction))
+            up             = linalg.cross(direction, right) // Inputs are already normalized
+            view_mat       = linalg.matrix4_look_at_f32(position, position + direction, up)
+            projection_mat = linalg.matrix4_perspective_f32(
+                math.to_radians_f32(fov), 
+                global.viewport_size.width / global.viewport_size.height,
+                0.1, 
+                100
+            )
+
             glw.shader_uniform_set(shader, "view", &view_mat)
-            projection_mat := linalg.matrix4_perspective_f32(math.to_radians_f32(fov), global.viewport_size.width / global.viewport_size.height, 0.1, 100)
             glw.shader_uniform_set(shader, "projection", &projection_mat)
         }
 
