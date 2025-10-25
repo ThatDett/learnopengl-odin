@@ -17,18 +17,56 @@ GL_MINOR_VERSION :: 3
 WINDOW_NAME         :: "Leaning OpenGl"
 WINDOW_DEFAULT_SIZE :: Dimensions{1280, 720}
 
+CAMERA_MAX_FOV :: 45
+CAMERA_MIN_FOV :: 1
+
+UP       :: linalg.Vector3f32{0, 1, 0}
+DOWN     :: linalg.Vector3f32{0, -1, 0}
+RIGHT    :: linalg.Vector3f32{1, 0, 0}
+LEFT     :: linalg.Vector3f32{-1, 0, 0}
+OUTWARDS :: linalg.Vector3f32{0, 0, 1}
+TOWARDS  :: linalg.Vector3f32{0, 0, -1}
+
 Dimensions :: struct
 {
     width, height: f32
 }
 
+Camera :: struct
+{
+    using position: linalg.Vector3f32,
+    target:         linalg.Vector3f32,
+    direction:      linalg.Vector3f32,
+    front:          linalg.Vector3f32,
+    up:             linalg.Vector3f32,
+    right:          linalg.Vector3f32,
+    
+    fov:   f32,
+    speed: f32,
+    yaw:   f32,
+    pitch: f32,
+}
+
+Mouse :: struct
+{
+    using position:    linalg.Vector2f32,
+    previous_position: linalg.Vector2f32,
+
+    sensitivity:        f32,
+    scroll_sensitivity: f32
+}
+
 global := struct
 {
+    camera:        Camera,
+    mouse:         Mouse,
     viewport_size: Dimensions,
-    percentage:    f32,
+    dt:            f64,
+
+    first_call:    bool,
 }{
-    percentage    = 0.2,
     viewport_size = WINDOW_DEFAULT_SIZE,
+    first_call    = true
 }
 
 set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
@@ -37,17 +75,59 @@ set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, wid
     gl.Viewport(0, 0, width, height)
 }
 
+scroll_callback :: proc "c" (window_handle: glfw.WindowHandle, x_offset, y_offset: f64)
+{
+    using global.camera
+    fov -= f32(y_offset) * global.mouse.scroll_sensitivity
+    fov  = math.clamp(fov, CAMERA_MIN_FOV, CAMERA_MAX_FOV)
+}
+
+mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: f64)
+{
+    using global.mouse
+    position        = {f32(mouse_x), f32(mouse_y)}
+    if global.first_call {
+        previous_position = position
+        global.first_call = false
+    }
+    delta_position := type_of(position){
+        position.x - previous_position.x,
+      -(position.y - previous_position.y)
+    }
+
+    delta_position      *= sensitivity
+    global.camera.yaw   += delta_position.x
+    global.camera.pitch += delta_position.y
+
+    global.camera.pitch = math.clamp(global.camera.pitch, -89, 89)
+    global.camera.direction = {
+        math.cos(math.to_radians(global.camera.yaw)) * math.cos(math.to_radians(global.camera.pitch)),
+        math.sin(math.to_radians(global.camera.pitch)),
+        math.sin(math.to_radians(global.camera.yaw)) * math.cos(math.to_radians(global.camera.pitch)),
+    }
+
+    global.camera.front = linalg.normalize(global.camera.direction)
+    previous_position   = position
+}
+
 process_input :: proc "c" (window_handle: glfw.WindowHandle) 
 {
     if glfw.GetKey(window_handle, glfw.KEY_ESCAPE) == glfw.PRESS {
         glfw.SetWindowShouldClose(window_handle, true)
     }
-    
-    if glfw.GetKey(window_handle, glfw.KEY_DOWN) == glfw.PRESS {
-        global.percentage -= 0.001
+
+    camera_speed := global.camera.speed * f32(global.dt)
+    if glfw.GetKey(window_handle, glfw.KEY_W) == glfw.PRESS {
+        global.camera.position += camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.front.x, 0, global.camera.front.z})
     }
-    else if glfw.GetKey(window_handle, glfw.KEY_UP) == glfw.PRESS {
-        global.percentage += 0.001
+    if glfw.GetKey(window_handle, glfw.KEY_S) == glfw.PRESS {
+        global.camera.position -= camera_speed * linalg.normalize(type_of(global.camera.position){global.camera.front.x, 0, global.camera.front.z})
+    }
+    if glfw.GetKey(window_handle, glfw.KEY_D) == glfw.PRESS {
+        global.camera.position += camera_speed * linalg.normalize(linalg.cross(global.camera.front, global.camera.up))
+    }
+    if glfw.GetKey(window_handle, glfw.KEY_A) == glfw.PRESS {
+        global.camera.position -= camera_speed * linalg.normalize(linalg.cross(global.camera.front, global.camera.up))
     }
 }
 
@@ -66,6 +146,7 @@ main :: proc()
         nil,
     )
 
+    glfw.SetInputMode(window_handle, glfw.CURSOR, glfw.CURSOR_DISABLED)
     glfw.SetWindowPos(window_handle, 0, 32)
 
     defer {
@@ -78,7 +159,6 @@ main :: proc()
         return
     }
 
-
     glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, GL_MAJOR_VERSION)
     glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, GL_MINOR_VERSION)
     glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
@@ -87,6 +167,8 @@ main :: proc()
     gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
     glfw.SetFramebufferSizeCallback(window_handle, set_framebuffer_size_callback)
+    glfw.SetCursorPosCallback(window_handle,       mouse_callback)
+    glfw.SetScrollCallback(window_handle,          scroll_callback)
 
     gl.Viewport(0, 0, i32(global.viewport_size.width), i32(global.viewport_size.height))
     gl.ClearColor(0.2, 0.3, 0.3, 1.0)
@@ -161,9 +243,9 @@ main :: proc()
 
     stbi.set_flip_vertically_on_load(c.int(true))
 
-    image_name: cstring = "res/images/container.jpg";
     width, height, number_of_channels: c.int = ---, ---, ---
-    data := stbi.load(image_name, &width, &height, &number_of_channels, 0)
+    image_name  := cstring("res/images/container.jpg");
+    data        := stbi.load(image_name, &width, &height, &number_of_channels, 0)
     if data == nil {
         fmt.eprintfln("Could not load %v", image_name)
         return
@@ -184,7 +266,7 @@ main :: proc()
     gl.GenerateMipmap(gl.TEXTURE_2D)
 
     image_name = "res/images/awesomeface.png"
-    data = stbi.load(image_name, &width, &height, &number_of_channels, 0)
+    data       = stbi.load(image_name, &width, &height, &number_of_channels, 0)
     if data == nil {
         fmt.eprintfln("Could not load %v", image_name)
         return
@@ -235,33 +317,47 @@ main :: proc()
     gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     gl.EnableVertexAttribArray(1)
 
-    // vec            := linalg.Vector4f32{1, 0, 0, 1}
-    // transformation := linalg.matrix4_translate_f32({0.5, -0.5, 0})
-    // transformation = linalg.matrix4_rotate_f32(math.PI / 2, {0, 0 ,1})
-    // transformation = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * transformation
-    // vec            = transformation * vec
-
-    // glw.shader_uniform_set(shader, "u_transform", &transformation)
-    // model_mat      := linalg.MATRIX4F32_IDENTITY
-    view_mat       := linalg.matrix4_translate_f32({0, 0, -6})
-    projection_mat := linalg.matrix4_perspective_f32(math.to_radians_f32(45), global.viewport_size.width / global.viewport_size.height, 0.1, 100)
-
-    glw.shader_uniform_set(shader, "view",       &view_mat)
-    glw.shader_uniform_set(shader, "projection", &projection_mat)
+    view_mat       := linalg.MATRIX4F32_IDENTITY
 
     gl.Enable(gl.DEPTH_TEST)
-    for !glfw.WindowShouldClose(window_handle) {
-        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        glw.shader_uniform_set(shader, "u_percent", global.percentage)
 
-        // model_mat := linalg.matrix4_rotate_f32(math.to_radians_f32(50) * f32(glfw.GetTime()), {0.5, 1, 0})
-        // glw.shader_uniform_set(shader, "model",      &model_mat)
+    //Init camera
+    {
+        using global.camera
+        position  = {0, 0, 3}
+        direction = linalg.normalize(position - target)
+
+        fov   = 45
+        speed = 5
+        yaw   = -90
+    }
+    //Init mouse
+    {
+        using global.mouse
+        sensitivity        = 0.05
+        scroll_sensitivity = 3
+    }
+    
+
+    last_frame: f64
+    for !glfw.WindowShouldClose(window_handle) {
+        current_time := glfw.GetTime()
+        global.dt     = current_time - last_frame
+        last_frame    = current_time
+
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+        {
+            using global.camera
+            right     = linalg.normalize(linalg.cross(UP, direction))
+            up        = linalg.cross(direction, right) // Inputs are already normalized
+            view_mat  = linalg.matrix4_look_at_f32(position, position + front, up)
+            glw.shader_uniform_set(shader, "view", &view_mat)
+            projection_mat := linalg.matrix4_perspective_f32(math.to_radians_f32(fov), global.viewport_size.width / global.viewport_size.height, 0.1, 100)
+            glw.shader_uniform_set(shader, "projection", &projection_mat)
+        }
 
         for cube_position, i in cube_positions {
             model := linalg.MATRIX4F32_IDENTITY
-            if i % 3 == 0 {
-                model  = linalg.matrix4_rotate_f32(f32(math.to_radians(glfw.GetTime() * f64(25 * i))), {1, 0.3, 0.5}) * model
-            }
             model = linalg.matrix4_translate_f32(cube_position) * model
             glw.shader_uniform_set(shader, "model", &model)
 
