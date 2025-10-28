@@ -20,12 +20,12 @@ WINDOW_DEFAULT_SIZE :: Dimensions{1280, 720}
 CAMERA_MAX_FOV :: 45
 CAMERA_MIN_FOV :: 1
 
-UP       :: linalg.Vector3f32{0, 1, 0}
-DOWN     :: linalg.Vector3f32{0, -1, 0}
-RIGHT    :: linalg.Vector3f32{1, 0, 0}
-LEFT     :: linalg.Vector3f32{-1, 0, 0}
-OUTWARDS :: linalg.Vector3f32{0, 0, 1}
-TOWARDS  :: linalg.Vector3f32{0, 0, -1}
+UP       :: linalg.Vector3f32{ 0,  1,  0}
+DOWN     :: linalg.Vector3f32{ 0, -1,  0}
+RIGHT    :: linalg.Vector3f32{ 1,  0,  0}
+LEFT     :: linalg.Vector3f32{-1,  0,  0}
+OUTWARDS :: linalg.Vector3f32{ 0,  0,  1}
+TOWARDS  :: linalg.Vector3f32{ 0,  0, -1}
 
 Dimensions :: struct
 {
@@ -70,10 +70,10 @@ global := struct
     viewport_size: Dimensions,
     dt:            f64,
 
-    first_call:    bool,
+    first_mouse_callback:    bool,
 }{
     viewport_size = WINDOW_DEFAULT_SIZE,
-    first_call    = true
+    first_mouse_callback    = true
 }
 
 set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
@@ -93,9 +93,9 @@ mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: 
 {
     using global.mouse
     position        = {f32(mouse_x), f32(mouse_y)}
-    if global.first_call {
+    if global.first_mouse_callback {
         previous_position = position
-        global.first_call = false
+        global.first_mouse_callback = false
     }
     delta_position := type_of(position){
         x - previous_position.x,
@@ -195,69 +195,73 @@ main :: proc()
     }
     
     glw.shader_use(lighting_shader)
+    light_color := linalg.Vector3f32{1, 1, 1}
     glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
-    glw.shader_uniform_set_vec3("light_color",  {1, 1, 1})
+    glw.shader_uniform_set_vec3("light_color", light_color)
 
     light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
 
-    light_pos := linalg.Vector3f32{1.2, 0, 2}
+    light_pos := linalg.Vector3f32{}
+
+    glw.shader_use(light_source_shader)
+    glw.shader_uniform_set_vec3("light_color", light_color)
 
     vertices := [?]f32{
-        -0.5, -0.5, -0.5, // 0.0, 0.0,
-         0.5, -0.5, -0.5, // 1.0, 0.0,
-         0.5,  0.5, -0.5, // 1.0, 1.0,
-         0.5,  0.5, -0.5, // 1.0, 1.0,
-        -0.5,  0.5, -0.5, // 0.0, 1.0,
-        -0.5, -0.5, -0.5, // 0.0, 0.0,
+        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,
+         0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 
+         0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
+         0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
+        -0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
+        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 
 
-        -0.5, -0.5,  0.5, // 0.0, 0.0,
-         0.5, -0.5,  0.5, // 1.0, 0.0,
-         0.5,  0.5,  0.5, // 1.0, 1.0,
-         0.5,  0.5,  0.5, // 1.0, 1.0,
-        -0.5,  0.5,  0.5, // 0.0, 1.0,
-        -0.5, -0.5,  0.5, // 0.0, 0.0,
+        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
+         0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
+         0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
+         0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
 
-        -0.5,  0.5,  0.5, // 1.0, 0.0,
-        -0.5,  0.5, -0.5, // 1.0, 1.0,
-        -0.5, -0.5, -0.5, // 0.0, 1.0,
-        -0.5, -0.5, -0.5, // 0.0, 1.0,
-        -0.5, -0.5,  0.5, // 0.0, 0.0,
-        -0.5,  0.5,  0.5, // 1.0, 0.0,
+        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,
+        -0.5,  0.5, -0.5, -1.0,  0.0,  0.0,
+        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,
+        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,
+        -0.5, -0.5,  0.5, -1.0,  0.0,  0.0,
+        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,
 
-         0.5,  0.5,  0.5, // 1.0, 0.0,
-         0.5,  0.5, -0.5, // 1.0, 1.0,
-         0.5, -0.5, -0.5, // 0.0, 1.0,
-         0.5, -0.5, -0.5, // 0.0, 1.0,
-         0.5, -0.5,  0.5, // 0.0, 0.0,
-         0.5,  0.5,  0.5, // 1.0, 0.0,
+         0.5,  0.5,  0.5,  1.0,  0.0,  0.0,
+         0.5,  0.5, -0.5,  1.0,  0.0,  0.0,
+         0.5, -0.5, -0.5,  1.0,  0.0,  0.0,
+         0.5, -0.5, -0.5,  1.0,  0.0,  0.0,
+         0.5, -0.5,  0.5,  1.0,  0.0,  0.0,
+         0.5,  0.5,  0.5,  1.0,  0.0,  0.0,
 
-        -0.5, -0.5, -0.5, // 0.0, 1.0,
-         0.5, -0.5, -0.5, // 1.0, 1.0,
-         0.5, -0.5,  0.5, // 1.0, 0.0,
-         0.5, -0.5,  0.5, // 1.0, 0.0,
-        -0.5, -0.5,  0.5, // 0.0, 0.0,
-        -0.5, -0.5, -0.5, // 0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
+         0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
+         0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
+         0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
+        -0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
+        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
 
-        -0.5,  0.5, -0.5, // 0.0, 1.0,
-         0.5,  0.5, -0.5, // 1.0, 1.0,
-         0.5,  0.5,  0.5, // 1.0, 0.0,
-         0.5,  0.5,  0.5, // 1.0, 0.0,
-        -0.5,  0.5,  0.5, // 0.0, 0.0,
-        -0.5,  0.5, -0.5, // 0.0, 1.0
+        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0,
+         0.5,  0.5, -0.5,  0.0,  1.0,  0.0,
+         0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
+         0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
+        -0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
+        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0
     }
 
-    cube_positions := [?]linalg.Vector3f32{
-        { 0.0,  0.0,  0.0, },
-        { 2.0,  5.0, -15.0,}, 
-        {-1.5, -2.2, -2.5, }, 
-        {-3.8, -2.0, -12.3,},  
-        { 2.4, -0.4, -3.5, }, 
-        {-1.7,  3.0, -7.5, }, 
-        { 1.3, -2.0, -2.5, }, 
-        { 1.5,  2.0, -2.5, },
-        { 1.5,  0.2, -1.5, },
-        {-1.3,  1.0, -1.5  },
-    }
+    // cube_positions := [?]linalg.Vector3f32{
+    //     { 0.0,  0.0,  0.0, },
+    //     { 2.0,  5.0, -15.0,}, 
+    //     {-1.5, -2.2, -2.5, }, 
+    //     {-3.8, -2.0, -12.3,},  
+    //     { 2.4, -0.4, -3.5, }, 
+    //     {-1.7,  3.0, -7.5, }, 
+    //     { 1.3, -2.0, -2.5, }, 
+    //     { 1.5,  2.0, -2.5, },
+    //     { 1.5,  0.2, -1.5, },
+    //     {-1.3,  1.0, -1.5  },
+    // }
 
     vertex_indices := [?]u32{
         0, 1, 3,
@@ -328,7 +332,7 @@ main :: proc()
     gl.BindVertexArray(light_vao)
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
 
-    stride: i32 = 3 * size_of(f32)
+    stride: i32 = 6 * size_of(f32)
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
     gl.EnableVertexAttribArray(0)
 
@@ -342,6 +346,9 @@ main :: proc()
 
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
     gl.EnableVertexAttribArray(0)
+
+    gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
+    gl.EnableVertexAttribArray(1)
 
     // gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     // gl.EnableVertexAttribArray(1)
@@ -391,28 +398,39 @@ main :: proc()
             up             = linalg.cross(direction, right) // Inputs are already normalized
             view_mat       = linalg.matrix4_look_at_f32(position, position + direction, up)
             projection_mat = linalg.matrix4_perspective_f32(
-                math.to_radians_f32(fov), 
+                math.to_radians_f32(CAMERA_MAX_FOV), 
                 global.viewport_size.width / global.viewport_size.height,
                 0.1, 
                 100
             )
         }
 
-        model_mat = linalg.MATRIX4F32_IDENTITY
-        model_mat = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-        gl.BindVertexArray(vao)
         glw.shader_use(lighting_shader)
-        glw.shader_uniform_set("model",      &model_mat)
-        glw.shader_uniform_set("view",       &view_mat)
         glw.shader_uniform_set("projection", &projection_mat)
+        glw.shader_uniform_set("view",       &view_mat)
+
+        light_pos = global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {}
+        model_mat = linalg.MATRIX4F32_IDENTITY
+        // model_mat = linalg.matrix4_translate_f32({}) * model_mat
+        model_mat = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+        glw.shader_uniform_set("model",      &model_mat)
+        // glw.shader_uniform_set("camera_pos", global.camera.position)
+        glw.shader_uniform_set("light_pos",  light_pos)
+
+        gl.BindVertexArray(vao)
         draw_cube()
 
-        model_mat = linalg.matrix4_translate(light_pos) * model_mat
-        gl.BindVertexArray(light_vao)
         glw.shader_use(light_source_shader)
-        glw.shader_uniform_set("model",      &model_mat)
-        glw.shader_uniform_set("view",       &view_mat)
         glw.shader_uniform_set("projection", &projection_mat)
+
+        glw.shader_uniform_set("view",       &view_mat)
+        model_mat = linalg.MATRIX4F32_IDENTITY
+        model_mat = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+        model_mat = linalg.matrix4_translate_f32(light_pos) * model_mat
+        glw.shader_uniform_set("model",      &model_mat)
+
+
+        gl.BindVertexArray(light_vao)
         draw_cube()
 
         // for cube_position, i in cube_positions {
