@@ -3,7 +3,7 @@ package learn_opengl
 import "core:c"
 import "core:fmt"
 import "core:math"
-import "core:math/linalg"
+import alg "core:math/linalg"
 
 import gl "vendor:OpenGL"
 import "vendor:glfw"
@@ -15,36 +15,36 @@ GL_MAJOR_VERSION :: 3
 GL_MINOR_VERSION :: 3
 
 WINDOW_NAME         :: "Leaning OpenGl"
-WINDOW_DEFAULT_SIZE :: Dimensions{1280, 720}
+WINDOW_DEFAULT_SIZE :: Dimensions{1280/1, 720/1}
 
 CAMERA_MAX_FOV :: 45
 CAMERA_MIN_FOV :: 1
 
-UP       :: linalg.Vector3f32{ 0,  1,  0}
-DOWN     :: linalg.Vector3f32{ 0, -1,  0}
-RIGHT    :: linalg.Vector3f32{ 1,  0,  0}
-LEFT     :: linalg.Vector3f32{-1,  0,  0}
-OUTWARDS :: linalg.Vector3f32{ 0,  0,  1}
-TOWARDS  :: linalg.Vector3f32{ 0,  0, -1}
+RIGHT    :: alg.Vector3f32{ 1,  0,  0}
+UP       :: alg.Vector3f32{ 0,  1,  0}
+OUTWARDS :: alg.Vector3f32{ 0,  0,  1}
+LEFT     :: -RIGHT
+DOWN     :: -UP
+TOWARDS  :: -OUTWARDS
+
+Movement_Mode :: enum
+{
+    walk,
+    fly,
+}
 
 Dimensions :: struct
 {
     width, height: f32
 }
 
-Movement_Mode :: enum
-{
-    walk,
-    fly
-}
-
 Camera :: struct
 {
-    using position: linalg.Vector3f32,
-    target:         linalg.Vector3f32,
-    direction:      linalg.Vector3f32,
-    up:             linalg.Vector3f32,
-    right:          linalg.Vector3f32,
+    using position: alg.Vector3f32,
+    target:         alg.Vector3f32,
+    direction:      alg.Vector3f32,
+    up:             alg.Vector3f32,
+    right:          alg.Vector3f32,
 
     movement_mode: Movement_Mode,
     
@@ -56,8 +56,8 @@ Camera :: struct
 
 Mouse :: struct
 {
-    using position:    linalg.Vector2f32,
-    previous_position: linalg.Vector2f32,
+    using position:    alg.Vector2f32,
+    previous_position: alg.Vector2f32,
 
     sensitivity:        f32,
     scroll_sensitivity: f32
@@ -113,7 +113,7 @@ mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: 
         math.sin(math.to_radians(global.camera.yaw)) * math.cos(math.to_radians(global.camera.pitch)),
     }
 
-    global.camera.direction = linalg.normalize(global.camera.direction)
+    global.camera.direction = alg.normalize(global.camera.direction)
     previous_position   = position
 }
 
@@ -125,9 +125,9 @@ process_input :: proc "c" (window_handle: glfw.WindowHandle)
 
     camera_speed := global.camera.speed * f32(global.dt)
     direction    := global.camera.direction
-    if (global.camera.movement_mode == Movement_Mode.fly)
+    if (global.camera.movement_mode == .fly)
     {
-        direction = linalg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
+        direction = alg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
     }
 
     if glfw.GetKey(window_handle, glfw.KEY_W) == glfw.PRESS {
@@ -137,10 +137,10 @@ process_input :: proc "c" (window_handle: glfw.WindowHandle)
         global.camera.position -= camera_speed * direction
     }
     if glfw.GetKey(window_handle, glfw.KEY_D) == glfw.PRESS {
-        global.camera.position += camera_speed * linalg.normalize(linalg.cross(global.camera.direction, global.camera.up))
+        global.camera.position += camera_speed * alg.normalize(alg.cross(global.camera.direction, global.camera.up))
     }
     if glfw.GetKey(window_handle, glfw.KEY_A) == glfw.PRESS {
-        global.camera.position -= camera_speed * linalg.normalize(linalg.cross(global.camera.direction, global.camera.up))
+        global.camera.position -= camera_speed * alg.normalize(alg.cross(global.camera.direction, global.camera.up))
     }
 }
 
@@ -195,13 +195,13 @@ main :: proc()
     }
     
     glw.shader_use(lighting_shader)
-    light_color := linalg.Vector3f32{1, 1, 1}
+    light_color := alg.Vector3f32{1, 1, 1}
     glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
     glw.shader_uniform_set_vec3("light_color", light_color)
 
     light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
 
-    light_pos := linalg.Vector3f32{}
+    light_pos := alg.Vector3f32{}
 
     glw.shader_use(light_source_shader)
     glw.shader_uniform_set_vec3("light_color", light_color)
@@ -250,7 +250,7 @@ main :: proc()
         -0.5,  0.5, -0.5,  0.0,  1.0,  0.0
     }
 
-    // cube_positions := [?]linalg.Vector3f32{
+    // cube_positions := [?]alg.Vector3f32{
     //     { 0.0,  0.0,  0.0, },
     //     { 2.0,  5.0, -15.0,}, 
     //     {-1.5, -2.2, -2.5, }, 
@@ -356,9 +356,9 @@ main :: proc()
     // gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     // gl.EnableVertexAttribArray(1)
 
-    model_mat:      linalg.Matrix4x4f32 = --- 
-    view_mat:       linalg.Matrix4x4f32 = --- 
-    projection_mat: linalg.Matrix4x4f32 = --- 
+    model_mat:      alg.Matrix4x4f32 = --- 
+    view_mat:       alg.Matrix4x4f32 = --- 
+    projection_mat: alg.Matrix4x4f32 = --- 
 
     gl.Enable(gl.DEPTH_TEST)
 
@@ -366,7 +366,7 @@ main :: proc()
     {
         using global.camera
         position  = {0, 0, 3}
-        direction = linalg.normalize(position - target)
+        direction = alg.normalize(position - target)
 
         fov   = 45
         speed = 5
@@ -379,73 +379,91 @@ main :: proc()
         scroll_sensitivity = 3
     }
     
-    // model_mat = linalg.MATRIX4F32_IDENTITY
+    // model_mat = alg.MATRIX4F32_IDENTITY
     draw_cube :: proc()
     {
         gl.DrawArrays(gl.TRIANGLES, 0, 36)
     }
 
-    last_frame: f64
+    seconds_accumulator: f64
+    fps_accumulator:     f64
+    iteration_count:     u32
+    frame_count:         u32
+    last_frame:          f64
     for !glfw.WindowShouldClose(window_handle) {
-        current_time := glfw.GetTime()
-        global.dt     = current_time - last_frame
+        current_time        := glfw.GetTime()
+        global.dt            = current_time - last_frame
+        seconds_accumulator += global.dt
+        fps_accumulator     += global.dt
+        iteration_count     += 1
+
+        if seconds_accumulator >= 1 {
+            // fmt.printfln("FPS: %v", frame_count)
+            // fmt.printfln("IPS: %v", iteration_count)
+            seconds_accumulator = 0
+            frame_count         = 0
+            iteration_count     = 0
+        }
         last_frame    = current_time
 
-        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-        {
-            using global.camera
-            right          = linalg.normalize(linalg.cross(UP, direction))
-            up             = linalg.cross(direction, right) // Inputs are already normalized
-            view_mat       = linalg.matrix4_look_at_f32(position, position + direction, up)
-            projection_mat = linalg.matrix4_perspective_f32(
-                math.to_radians_f32(CAMERA_MAX_FOV), 
-                global.viewport_size.width / global.viewport_size.height,
-                0.1, 
-                100
-            )
+        FPS_PER_SEC :: 60
+        if fps_accumulator >= 1.0/FPS_PER_SEC {
+            frame_count     += 1
+            fps_accumulator  = 0
+            gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+            {
+                using global.camera
+                right          = alg.normalize(alg.cross(UP, direction))
+                up             = alg.cross(direction, right) // Inputs are already normalized
+                view_mat       = alg.matrix4_look_at_f32(position, position + direction, up)
+                projection_mat = alg.matrix4_perspective_f32(
+                    math.to_radians_f32(CAMERA_MAX_FOV), 
+                    global.viewport_size.width / global.viewport_size.height,
+                    0.1, 
+                    100
+                )
+                // coiso := f32(5)
+                // projection_mat = alg.matrix_ortho3d_f32(
+                //     -coiso, coiso, -coiso, coiso, -coiso, coiso * 4
+                // )
+            }
+
+            glw.shader_use(lighting_shader)
+            glw.shader_uniform_set("projection", &projection_mat)
+            glw.shader_uniform_set("view",       &view_mat)
+
+            model_mat = alg.MATRIX4F32_IDENTITY
+            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+            model_mat = alg.matrix4_translate_f32({2, 0, 2})   * model_mat
+            gl.BindVertexArray(vao)
+
+            glw.shader_uniform_set("model",      &model_mat)
+            glw.shader_uniform_set("camera_pos", global.camera.position)
+            glw.shader_uniform_set("light_pos",  light_pos)
+
+            draw_cube()
+
+            glw.shader_use(light_source_shader)
+            glw.shader_uniform_set("projection", &projection_mat)
+            glw.shader_uniform_set("view",       &view_mat)
+
+            model_mat = alg.MATRIX4F32_IDENTITY
+            light_pos = alg.lerp(light_pos, global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {}, 0.1)
+            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+            model_mat = alg.matrix4_translate_f32(light_pos) * model_mat
+            glw.shader_uniform_set("model",      &model_mat)
+
+
+            gl.BindVertexArray(light_vao)
+            draw_cube()
+
+            // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
+
+
+            glfw.SwapBuffers(window_handle)
         }
 
-        glw.shader_use(lighting_shader)
-        glw.shader_uniform_set("projection", &projection_mat)
-        glw.shader_uniform_set("view",       &view_mat)
-
-        light_pos = global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {}
-        model_mat = linalg.MATRIX4F32_IDENTITY
-        // model_mat = linalg.matrix4_translate_f32({}) * model_mat
-        model_mat = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-        glw.shader_uniform_set("model",      &model_mat)
-        // glw.shader_uniform_set("camera_pos", global.camera.position)
-        glw.shader_uniform_set("light_pos",  light_pos)
-
-        gl.BindVertexArray(vao)
-        draw_cube()
-
-        glw.shader_use(light_source_shader)
-        glw.shader_uniform_set("projection", &projection_mat)
-
-        glw.shader_uniform_set("view",       &view_mat)
-        model_mat = linalg.MATRIX4F32_IDENTITY
-        model_mat = linalg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-        model_mat = linalg.matrix4_translate_f32(light_pos) * model_mat
-        glw.shader_uniform_set("model",      &model_mat)
-
-
-        gl.BindVertexArray(light_vao)
-        draw_cube()
-
-        // for cube_position, i in cube_positions {
-        //     model := linalg.MATRIX4F32_IDENTITY
-        //     model = linalg.matrix4_translate_f32(cube_position) * model
-        //     glw.shader_uniform_set(lighting_shader, "model", &model)
-        //
-        //     gl.DrawArrays(gl.TRIANGLES, 0, 36)
-        // }
-
-        // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
-
         process_input(window_handle)
-
-        glfw.SwapBuffers(window_handle)
         glfw.PollEvents()
     }
 }

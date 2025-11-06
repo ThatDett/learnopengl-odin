@@ -63,7 +63,7 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     }
 
     buffer: [256]byte = ---
-    fmt.printf("Diagnostics for %v:\n\t", vertex_shader_path)
+    fmt.printf("Diagnostics for %v: ", vertex_shader_path)
     shader_diagnostic(vertex_shader, buffer[:]) or_return
 
     file, err = os.open(fragment_shader_path)
@@ -88,7 +88,7 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     }
 
     // fmt.printfln("%v", buffer)
-    fmt.printf("Diagnostics for %v:\n\t", fragment_shader_path)
+    fmt.printf("Diagnostics for %v: ", fragment_shader_path)
     shader_diagnostic(fragment_shader, buffer[:]) or_return
 
     shader.id = gl.CreateProgram()
