@@ -1,21 +1,27 @@
 package learn_opengl
 
-import "core:c"
-import "core:fmt"
-import "core:math"
+import     "core:c"
+import     "core:fmt"
+import     "core:math"
 import alg "core:math/linalg"
+import     "core:log" 
 
-import gl "vendor:OpenGL"
-import "vendor:glfw"
+import      "vendor:glfw"
+import gl   "vendor:OpenGL"
 import stbi "vendor:stb/image"
 
-import glw "gl_wrapper"
+import glw        "external/gl_wrapper"
+import imgui      "external/odin-imgui"
+import imgui_gl   "external/odin-imgui/impl/opengl"
+import imgui_glfw "external/odin-imgui/impl/glfw"
+
+PRINT_FPS :: #config(print_fps, false)
 
 GL_MAJOR_VERSION :: 3
 GL_MINOR_VERSION :: 3
 
-WINDOW_NAME         :: "Leaning OpenGl"
-WINDOW_DEFAULT_SIZE :: Dimensions{1280/1, 720/1}
+WINDOW_NAME         :: "Learning OpenGL"
+WINDOW_DEFAULT_SIZE :: Dimensions{1366/1, 768/1}
 
 CAMERA_MAX_FOV :: 45
 CAMERA_MIN_FOV :: 1
@@ -146,10 +152,22 @@ process_input :: proc "c" (window_handle: glfw.WindowHandle)
 
 main :: proc() 
 {
+    logger_options := log.Options {
+        .Level,
+        .Line,
+        .Procedure
+    }
+    context.logger = log.create_console_logger(logger_options)
+
     if !bool(glfw.Init()) {
-        fmt.eprintln("GLFW has failed to load.")
+        desc, error := glfw.get_error()
+        fmt.eprintln("GLFW has failed to load: ", error, desc)
         return
     }
+
+    glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, GL_MAJOR_VERSION)
+    glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, GL_MINOR_VERSION)
+    glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
     window_handle := glfw.CreateWindow(
         i32(global.viewport_size.width),
@@ -172,10 +190,6 @@ main :: proc()
         return
     }
 
-    glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, GL_MAJOR_VERSION)
-    glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, GL_MINOR_VERSION)
-    glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
-
     glfw.MakeContextCurrent(window_handle)
     gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
@@ -185,6 +199,14 @@ main :: proc()
 
     gl.Viewport(0, 0, i32(global.viewport_size.width), i32(global.viewport_size.height))
     gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+
+    imgui_context := imgui.create_context()
+    imgui_io      := imgui.get_io()
+
+    imgui.style_colors_dark()
+
+    imgui_style := imgui.get_style()
+    imgui.style_scale_all_sizes(imgui_style, 1)
     
     ok: bool = ---
 
@@ -195,16 +217,21 @@ main :: proc()
     }
     
     glw.shader_use(lighting_shader)
-    light_color := alg.Vector3f32{1, 1, 1}
-    glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
-    glw.shader_uniform_set_vec3("light_color", light_color)
+    // glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
+    // glw.shader_uniform_set_vec3("light_color", light_color)
+
+    glw.shader_uniform_set_vec3( "material.ambient",   {1,   0.5, 0.31})
+    glw.shader_uniform_set_vec3( "material.diffuse",   {0.2,   0.2, 0.31})
+    glw.shader_uniform_set_vec3( "material.specular",  {0.5, 0.5, 0.50})
+    glw.shader_uniform_set_float("material.shininess", 32)
+    glw.shader_uniform_set_vec3("light.specular",  {1.0, 1.0, 1.0})
 
     light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
 
     light_pos := alg.Vector3f32{}
 
     glw.shader_use(light_source_shader)
-    glw.shader_uniform_set_vec3("light_color", light_color)
+    glw.shader_uniform_set_vec3("light_color", {1, 1, 1})
 
     vertices := [?]f32{
         -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,
@@ -398,8 +425,11 @@ main :: proc()
         iteration_count     += 1
 
         if seconds_accumulator >= 1 {
-            // fmt.printfln("FPS: %v", frame_count)
-            // fmt.printfln("IPS: %v", iteration_count)
+            when PRINT_FPS
+            {
+                fmt.printfln("FPS: %v", frame_count)
+                fmt.printfln("IPS: %v", iteration_count)
+            }
             seconds_accumulator = 0
             frame_count         = 0
             iteration_count     = 0
@@ -408,6 +438,12 @@ main :: proc()
 
         FPS_PER_SEC :: 60
         if fps_accumulator >= 1.0/FPS_PER_SEC {
+            glfw.PollEvents()
+
+            // imgui.new_frame()
+            // imgui.begin("Test")
+            // imgui.end()
+            // imgui.render()
             frame_count     += 1
             fps_accumulator  = 0
             gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -429,6 +465,20 @@ main :: proc()
             }
 
             glw.shader_use(lighting_shader)
+
+            light_color := alg.Vector3f32{
+                // cast(f32)math.sin(glfw.GetTime() * 2),
+                // cast(f32)math.sin(glfw.GetTime() * 0.7),
+                // cast(f32)math.sin(glfw.GetTime() * 1.3)
+                1, 1, 1
+            }
+
+            diffuse_color := light_color   * alg.Vector3f32{0.5, 0.5, 0.5}
+            ambient_color := diffuse_color * alg.Vector3f32{0.2, 0.2, 0.2}
+
+            glw.shader_uniform_set_vec3("light.ambient",   ambient_color)
+            glw.shader_uniform_set_vec3("light.diffuse",   diffuse_color)
+
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
 
@@ -464,6 +514,5 @@ main :: proc()
         }
 
         process_input(window_handle)
-        glfw.PollEvents()
     }
 }

@@ -7,6 +7,9 @@ import "core:math/linalg"
 
 import gl "vendor:OpenGL"
 
+SHOW_SHADER_DIAGNOSTICS :: #config(shader_diagnostics, true)
+// SHOW_SHADER_DIAGNOSTICS :: false
+
 Handle :: u32
 
 Shader :: struct
@@ -26,6 +29,8 @@ shader_diagnostic :: proc(shader_handle: u32, buffer: []byte) -> (ok: bool)
     gl.GetShaderiv(shader_handle, gl.COMPILE_STATUS, &sucess)
     ok = bool(sucess)
 
+when SHOW_SHADER_DIAGNOSTICS 
+{
     if ok {
         fmt.println("Successful compilation of shader.")
     }
@@ -34,6 +39,7 @@ shader_diagnostic :: proc(shader_handle: u32, buffer: []byte) -> (ok: bool)
         fmt.eprintf("Error: compilation of shader failed.\n%s", buffer)
     }
 
+}
     return ok
 }
 
@@ -63,7 +69,10 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     }
 
     buffer: [256]byte = ---
-    fmt.printf("Diagnostics for %v: ", vertex_shader_path)
+    when SHOW_SHADER_DIAGNOSTICS 
+    {
+        fmt.printf("Diagnostics for %v: ", vertex_shader_path)
+    }
     shader_diagnostic(vertex_shader, buffer[:]) or_return
 
     file, err = os.open(fragment_shader_path)
@@ -88,7 +97,10 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     }
 
     // fmt.printfln("%v", buffer)
-    fmt.printf("Diagnostics for %v: ", fragment_shader_path)
+    when SHOW_SHADER_DIAGNOSTICS 
+    {
+        fmt.printf("Diagnostics for %v: ", fragment_shader_path)
+    }
     shader_diagnostic(fragment_shader, buffer[:]) or_return
 
     shader.id = gl.CreateProgram()
@@ -98,14 +110,21 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
     gl.AttachShader(shader.id, fragment_shader)
     gl.LinkProgram(shader.id)
 
+
     gl.GetProgramiv(shader.id, gl.LINK_STATUS, &success);
     if bool(success) {
-        fmt.printfln("Successful linkage of shader program")
+        when SHOW_SHADER_DIAGNOSTICS
+        {
+            fmt.printfln("Successful linkage of shader program")
+        }
     }
     else {
         buffer = 0
-        gl.GetProgramInfoLog(shader.id, len(buffer), nil, raw_data(buffer[:]));
-        fmt.eprintf("Error: could not link shader program.\n%s", buffer)
+        when SHOW_SHADER_DIAGNOSTICS
+        {
+            gl.GetProgramInfoLog(shader.id, len(buffer), nil, raw_data(buffer[:]));
+            fmt.eprintf("Error: could not link shader program.\n%s", buffer)
+        }
         return
     }
 
