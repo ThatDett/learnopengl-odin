@@ -1,0 +1,36 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  flags:
+    "
+    -define:print_fps=true
+    -define:shader_diagnostics=false
+    -o:none
+    "
+
+  build_command: "build src -out:bin/out.exe {{.flags}} -collection:dependencies=dependencies" 
+
+tasks:
+  build:
+    cmds:
+      - odin {{.build_command}}
+    sources:
+      - Taskfile.yaml
+      - src/**/*.odin
+      - dependencies/**/*.odin
+    silent: true
+  
+  debug:
+    cmds:
+      - odin {{.build_command}} -debug
+    silent: true
+    
+  run:
+    deps:
+      - build
+    cmds:
+      - ./bin/out.exe
+    silent: true
+

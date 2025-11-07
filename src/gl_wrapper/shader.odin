@@ -162,7 +162,7 @@ shader_uniform_set_float :: proc "contextless" (name: cstring, value: f32) -> (o
     return ok
 }
 
-shader_uniform_set_vec3 :: proc "contextless" (name: cstring, value: linalg.Vector3f32) -> (ok: bool)
+shader_uniform_set_vec3_f32 :: proc "contextless" (name: cstring, value: linalg.Vector3f32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -170,7 +170,15 @@ shader_uniform_set_vec3 :: proc "contextless" (name: cstring, value: linalg.Vect
     return ok
 }
 
-shader_uniform_set_matrix4 :: proc "contextless" (name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
+shader_uniform_set_vec3_f64 :: proc "contextless" (name: cstring, value: linalg.Vector3f64) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
+    ok                = uniform_location != -1
+    gl.Uniform3d(uniform_location, value.x, value.y, value.z)
+    return ok
+}
+
+shader_uniform_set_matrix4_f32 :: proc "contextless" (name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -178,10 +186,29 @@ shader_uniform_set_matrix4 :: proc "contextless" (name: cstring, value: ^linalg.
     return ok
 }
 
+shader_uniform_set_matrix4_f64 :: proc "contextless" (name: cstring, value: ^linalg.Matrix4f64) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
+    ok                = uniform_location != -1
+    gl.UniformMatrix4dv(uniform_location, 1, gl.FALSE, &value[0, 0])
+    return ok
+}
+
+shader_uniform_set_vec3 :: proc{
+    shader_uniform_set_vec3_f32, 
+    shader_uniform_set_vec3_f64 
+}
+
+shader_uniform_set_matrix4 :: proc{
+    shader_uniform_set_matrix4_f32,
+    shader_uniform_set_matrix4_f64
+}
 shader_uniform_set :: proc
 {
     shader_uniform_set_int,
     shader_uniform_set_float,
-    shader_uniform_set_vec3,
-    shader_uniform_set_matrix4, 
+    shader_uniform_set_vec3_f32,
+    shader_uniform_set_vec3_f64,
+    shader_uniform_set_matrix4_f32, 
+    shader_uniform_set_matrix4_f64, 
 }

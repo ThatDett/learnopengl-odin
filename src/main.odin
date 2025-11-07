@@ -10,10 +10,13 @@ import      "vendor:glfw"
 import gl   "vendor:OpenGL"
 import stbi "vendor:stb/image"
 
-import glw        "external/gl_wrapper"
-import imgui      "external/odin-imgui"
-import imgui_gl   "external/odin-imgui/impl/opengl"
-import imgui_glfw "external/odin-imgui/impl/glfw"
+import glw        "gl_wrapper"
+import            "dependencies:imgui"
+import imgui_gl   "dependencies:imgui/imgui_impl_opengl3"
+import imgui_glfw "dependencies:imgui/imgui_impl_glfw"
+// import imgui      "external/odin-imgui"
+// import imgui_gl   "external/odin-imgui/impl/opengl"
+// import imgui_glfw "external/odin-imgui/impl/glfw"
 
 PRINT_FPS :: #config(print_fps, false)
 
@@ -32,6 +35,14 @@ OUTWARDS :: alg.Vector3f32{ 0,  0,  1}
 LEFT     :: -RIGHT
 DOWN     :: -UP
 TOWARDS  :: -OUTWARDS
+
+Key_State :: enum u8
+{
+    nil,
+    pressed,
+    held,
+    released
+}
 
 Movement_Mode :: enum
 {
@@ -76,7 +87,8 @@ global := struct
     viewport_size: Dimensions,
     dt:            f64,
 
-    first_mouse_callback:    bool,
+    first_mouse_callback:  bool,
+    key_pressed:           [glfw.KEY_LAST + 1]Key_State,
 }{
     viewport_size = WINDOW_DEFAULT_SIZE,
     first_mouse_callback    = true
@@ -123,31 +135,72 @@ mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: 
     previous_position   = position
 }
 
-process_input :: proc "c" (window_handle: glfw.WindowHandle) 
+process_input :: proc(window_handle: glfw.WindowHandle) 
 {
-    if glfw.GetKey(window_handle, glfw.KEY_ESCAPE) == glfw.PRESS {
-        glfw.SetWindowShouldClose(window_handle, true)
-    }
+    @(static)
+    key_pressed_before: [glfw.KEY_LAST + 1]bool
+    for key in 0..=glfw.KEY_LAST {
+        state := glfw.GetKey(window_handle, cast(c.int)key)
 
-    camera_speed := global.camera.speed * f32(global.dt)
+        pressed_now    := (state == glfw.PRESS)
+        pressed_before := key_pressed_before[key]
+
+        if pressed_now && !pressed_before {
+            global.key_pressed[key] = .pressed
+        } else if !pressed_now && pressed_before {
+            global.key_pressed[key] = .released
+        }
+        else if pressed_now && pressed_before {
+            global.key_pressed[key] = .held
+        }
+        else {
+            global.key_pressed[key] = nil
+        }
+
+        key_pressed_before[key] = pressed_now
+    }
+}
+
+camera_movement :: proc "contextless" () -> f32
+{
+    camera_speed := f32(f64(global.camera.speed) * global.dt)
     direction    := global.camera.direction
     if (global.camera.movement_mode == .fly)
     {
         direction = alg.normalize(type_of(global.camera.position){global.camera.direction.x, 0, global.camera.direction.z})
     }
 
-    if glfw.GetKey(window_handle, glfw.KEY_W) == glfw.PRESS {
+    if key_held(glfw.KEY_W) {
         global.camera.position += camera_speed * direction
     }
-    if glfw.GetKey(window_handle, glfw.KEY_S) == glfw.PRESS {
+    if key_held(glfw.KEY_S) {
         global.camera.position -= camera_speed * direction
     }
-    if glfw.GetKey(window_handle, glfw.KEY_D) == glfw.PRESS {
+    if key_held(glfw.KEY_D) {
         global.camera.position += camera_speed * alg.normalize(alg.cross(global.camera.direction, global.camera.up))
     }
-    if glfw.GetKey(window_handle, glfw.KEY_A) == glfw.PRESS {
+    if key_held(glfw.KEY_A) {
         global.camera.position -= camera_speed * alg.normalize(alg.cross(global.camera.direction, global.camera.up))
     }
+    return camera_speed
+}
+
+key_pressed :: #force_inline proc "contextless" (key: c.int, caller_location := #caller_location) -> bool
+{
+    assert_contextless(key >= 0 && key <= glfw.KEY_LAST, "Invalid key", caller_location)
+    return global.key_pressed[key] == .pressed
+}
+
+key_released :: #force_inline proc "contextless" (key: c.int, caller_location := #caller_location) -> bool
+{
+    assert_contextless(key >= 0 && key <= glfw.KEY_LAST, "Invalid key", caller_location)
+    return global.key_pressed[key] == .released
+}
+
+key_held :: #force_inline proc "contextless" (key: c.int, caller_location := #caller_location) -> bool
+{
+    assert_contextless(key >= 0 && key <= glfw.KEY_LAST, "Invalid key", caller_location)
+    return global.key_pressed[key] == .held
 }
 
 main :: proc() 
@@ -157,10 +210,10 @@ main :: proc()
         .Line,
         .Procedure
     }
-    context.logger = log.create_console_logger(logger_options)
+    context.logger = log.create_console_logger(opt = logger_options)
 
     if !bool(glfw.Init()) {
-        desc, error := glfw.get_error()
+        desc, error := glfw.GetError()
         fmt.eprintln("GLFW has failed to load: ", error, desc)
         return
     }
@@ -191,6 +244,8 @@ main :: proc()
     }
 
     glfw.MakeContextCurrent(window_handle)
+    // glfw.SwapInterval(1) //
+
     gl.load_up_to(GL_MAJOR_VERSION, GL_MINOR_VERSION, glfw.gl_set_proc_address)
 
     glfw.SetFramebufferSizeCallback(window_handle, set_framebuffer_size_callback)
@@ -200,13 +255,20 @@ main :: proc()
     gl.Viewport(0, 0, i32(global.viewport_size.width), i32(global.viewport_size.height))
     gl.ClearColor(0.2, 0.3, 0.3, 1.0)
 
-    imgui_context := imgui.create_context()
-    imgui_io      := imgui.get_io()
+    imgui.CHECKVERSION()
+    imgui.CreateContext()
+    defer imgui.DestroyContext()
 
-    imgui.style_colors_dark()
+    imgui_io := imgui.GetIO()
+    imgui_io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad}
 
-    imgui_style := imgui.get_style()
-    imgui.style_scale_all_sizes(imgui_style, 1)
+    imgui.StyleColorsDark()
+
+    imgui_glfw.InitForOpenGL(window_handle, true)
+    defer imgui_glfw.Shutdown()
+
+    imgui_gl.Init("#version 330")
+    defer imgui_gl.Shutdown()
     
     ok: bool = ---
 
@@ -220,18 +282,18 @@ main :: proc()
     // glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
     // glw.shader_uniform_set_vec3("light_color", light_color)
 
-    glw.shader_uniform_set_vec3( "material.ambient",   {1,   0.5, 0.31})
-    glw.shader_uniform_set_vec3( "material.diffuse",   {0.2,   0.2, 0.31})
-    glw.shader_uniform_set_vec3( "material.specular",  {0.5, 0.5, 0.50})
+    glw.shader_uniform_set_vec3_f32( "material.ambient",   {1,   0.5, 0.31})
+    glw.shader_uniform_set_vec3_f32( "material.diffuse",   {1,   0.5, 0.31})
+    glw.shader_uniform_set_vec3_f32( "material.specular",  {0.5, 0.5, 0.50})
     glw.shader_uniform_set_float("material.shininess", 32)
-    glw.shader_uniform_set_vec3("light.specular",  {1.0, 1.0, 1.0})
+    glw.shader_uniform_set_vec3_f32("light.specular",  {1.0, 1.0, 1.0})
 
     light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
 
     light_pos := alg.Vector3f32{}
 
     glw.shader_use(light_source_shader)
-    glw.shader_uniform_set_vec3("light_color", {1, 1, 1})
+    glw.shader_uniform_set_vec3_f32("light_color", {1, 1, 1})
 
     vertices := [?]f32{
         -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,
@@ -319,12 +381,6 @@ main :: proc()
     // gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data)
     // gl.GenerateMipmap(gl.TEXTURE_2D)
 
-    image_name = "res/images/awesomeface.png"
-    data       = stbi.load(image_name, &width, &height, &number_of_channels, 0)
-    if data == nil {
-        fmt.eprintfln("Could not load %v", image_name)
-        return
-    }
 
     // gl.GenTextures(1, &texture)
     // gl.ActiveTexture(gl.TEXTURE1)
@@ -416,13 +472,19 @@ main :: proc()
     fps_accumulator:     f64
     iteration_count:     u32
     frame_count:         u32
-    last_frame:          f64
+    last_time:           f64
+
+    current_frame:        f64
+    last_frame:           f64
+    delta_iteration_time: f64
+
     for !glfw.WindowShouldClose(window_handle) {
-        current_time        := glfw.GetTime()
-        global.dt            = current_time - last_frame
-        seconds_accumulator += global.dt
-        fps_accumulator     += global.dt
-        iteration_count     += 1
+
+        current_time         := glfw.GetTime()
+        delta_iteration_time  = current_time - last_time
+        seconds_accumulator  += delta_iteration_time
+        fps_accumulator      += delta_iteration_time
+        iteration_count      += 1
 
         if seconds_accumulator >= 1 {
             when PRINT_FPS
@@ -434,19 +496,46 @@ main :: proc()
             frame_count         = 0
             iteration_count     = 0
         }
-        last_frame    = current_time
+        last_time    = current_time
 
         FPS_PER_SEC :: 60
         if fps_accumulator >= 1.0/FPS_PER_SEC {
             glfw.PollEvents()
 
-            // imgui.new_frame()
-            // imgui.begin("Test")
-            // imgui.end()
-            // imgui.render()
+            current_frame = current_time
+            global.dt     = current_frame - last_frame
+            last_frame    = current_time
+            process_input(window_handle)
+            camera_movement()
+            
+            if key_pressed(glfw.KEY_ESCAPE) {
+                if glfw.GetInputMode(window_handle, glfw.CURSOR) == glfw.CURSOR_DISABLED {
+                    glfw.SetInputMode(window_handle, glfw.CURSOR, glfw.CURSOR_NORMAL)
+                }
+                else {
+                    glfw.SetInputMode(window_handle, glfw.CURSOR, glfw.CURSOR_DISABLED)
+                }
+            }
+
+            imgui_gl.NewFrame()
+            imgui_glfw.NewFrame()
+            imgui.NewFrame()
+
+            if imgui.Begin("Panel") {
+                if imgui.Button("Quit") {
+                    glfw.SetWindowShouldClose(window_handle, true)
+                }
+            }
+
+            imgui.End()
+
+            display_w, display_h := glfw.GetFramebufferSize(window_handle)
+            gl.Viewport(0, 0, display_w, display_h)
+            // gl.ClearColor(0, 0, 0, 1)
+            gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
             frame_count     += 1
             fps_accumulator  = 0
-            gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
             {
                 using global.camera
                 right          = alg.normalize(alg.cross(UP, direction))
@@ -497,8 +586,13 @@ main :: proc()
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
 
+            // thingy_mabob := f32(1 - math.exp(-120 * global.dt))
             model_mat = alg.MATRIX4F32_IDENTITY
-            light_pos = alg.lerp(light_pos, global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {}, 0.1)
+            light_pos = alg.lerp(
+                light_pos,
+                global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {},
+                0.1
+            )
             model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
             model_mat = alg.matrix4_translate_f32(light_pos) * model_mat
             glw.shader_uniform_set("model",      &model_mat)
@@ -510,9 +604,10 @@ main :: proc()
             // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
 
+            imgui.Render()
+            imgui_gl.RenderDrawData(imgui.GetDrawData())
             glfw.SwapBuffers(window_handle)
         }
 
-        process_input(window_handle)
     }
 }

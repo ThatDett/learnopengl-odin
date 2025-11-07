@@ -1,3 +1,7 @@
 odinfmt.json
 ols.json
 build.bat
+imgui.ini
+bin/
+.vscode/
+.task/
