@@ -5,6 +5,8 @@ import     "core:fmt"
 import     "core:math"
 import alg "core:math/linalg"
 import     "core:log" 
+import     "core:os"
+import     "core:encoding/json"
 
 import      "vendor:glfw"
 import gl   "vendor:OpenGL"
@@ -18,24 +20,7 @@ import imgui_glfw "dependencies:imgui/imgui_impl_glfw"
 // import imgui_gl   "external/odin-imgui/impl/opengl"
 // import imgui_glfw "external/odin-imgui/impl/glfw"
 
-PRINT_FPS :: #config(print_fps, false)
-
-GL_MAJOR_VERSION :: 3
-GL_MINOR_VERSION :: 3
-
-WINDOW_NAME         :: "Learning OpenGL"
-WINDOW_DEFAULT_SIZE :: Dimensions{1366/1, 768/1}
-
-CAMERA_MAX_FOV :: 45
-CAMERA_MIN_FOV :: 1
-
-RIGHT    :: alg.Vector3f32{ 1,  0,  0}
-UP       :: alg.Vector3f32{ 0,  1,  0}
-OUTWARDS :: alg.Vector3f32{ 0,  0,  1}
-LEFT     :: -RIGHT
-DOWN     :: -UP
-TOWARDS  :: -OUTWARDS
-
+/////////////// - Enums - ///////////////
 Key_State :: enum u8
 {
     nil,
@@ -44,11 +29,21 @@ Key_State :: enum u8
     released
 }
 
-Movement_Mode :: enum
+Movement_Mode :: enum u8
 {
     walk,
     fly,
 }
+
+Mouse_Mode :: enum u8
+{
+    locked,
+    free,
+}
+
+/////////////// - Structs - ///////////////
+Vector2 :: alg.Vector2f32
+Vector3 :: alg.Vector3f32
 
 Dimensions :: struct
 {
@@ -57,11 +52,11 @@ Dimensions :: struct
 
 Camera :: struct
 {
-    using position: alg.Vector3f32,
-    target:         alg.Vector3f32,
-    direction:      alg.Vector3f32,
-    up:             alg.Vector3f32,
-    right:          alg.Vector3f32,
+    using position: Vector3,
+    target:         Vector3,
+    direction:      Vector3,
+    up:             Vector3,
+    right:          Vector3,
 
     movement_mode: Movement_Mode,
     
@@ -73,68 +68,35 @@ Camera :: struct
 
 Mouse :: struct
 {
-    using position:    alg.Vector2f32,
-    previous_position: alg.Vector2f32,
+    using position:    Vector2,
+    previous_position: Vector2,
+
+    mode: Mouse_Mode,
 
     sensitivity:        f32,
     scroll_sensitivity: f32
 }
 
-global := struct
-{
-    camera:        Camera,
-    mouse:         Mouse,
-    viewport_size: Dimensions,
-    dt:            f64,
+/////////////// - Constants - ///////////////
+PRINT_FPS :: #config(print_fps, false)
 
-    first_mouse_callback:  bool,
-    key_pressed:           [glfw.KEY_LAST + 1]Key_State,
-}{
-    viewport_size = WINDOW_DEFAULT_SIZE,
-    first_mouse_callback    = true
-}
+GL_MAJOR_VERSION :: 3
+GL_MINOR_VERSION :: 3
 
-set_framebuffer_size_callback :: proc "c" (window_handle: glfw.WindowHandle, width, height: i32) 
-{
-    global.viewport_size = {f32(width), f32(height)}
-    gl.Viewport(0, 0, width, height)
-}
+WINDOW_NAME         :: "Learning OpenGL"
+WINDOW_DEFAULT_SIZE :: Dimensions{1366/1, 768/1}
 
-scroll_callback :: proc "c" (window_handle: glfw.WindowHandle, x_offset, y_offset: f64)
-{
-    using global.camera
-    fov -= f32(y_offset) * global.mouse.scroll_sensitivity
-    fov  = math.clamp(fov, CAMERA_MIN_FOV, CAMERA_MAX_FOV)
-}
+CAMERA_MAX_FOV :: 45
+CAMERA_MIN_FOV :: 1
 
-mouse_callback :: proc "c" (window_handle: glfw.WindowHandle, mouse_x, mouse_y: f64)
-{
-    using global.mouse
-    position        = {f32(mouse_x), f32(mouse_y)}
-    if global.first_mouse_callback {
-        previous_position = position
-        global.first_mouse_callback = false
-    }
-    delta_position := type_of(position){
-        x - previous_position.x,
-      -(y - previous_position.y)
-    }
+RIGHT    :: Vector3{ 1,  0,  0}
+UP       :: Vector3{ 0,  1,  0}
+OUTWARDS :: Vector3{ 0,  0,  1}
+LEFT     :: -RIGHT
+DOWN     :: -UP
+TOWARDS  :: -OUTWARDS
 
-    delta_position      *= sensitivity
-    global.camera.yaw   += delta_position.x
-    global.camera.pitch += delta_position.y
-
-    global.camera.pitch = math.clamp(global.camera.pitch, -89, 89)
-    global.camera.direction = {
-        math.cos(math.to_radians(global.camera.yaw)) * math.cos(math.to_radians(global.camera.pitch)),
-        math.sin(math.to_radians(global.camera.pitch)),
-        math.sin(math.to_radians(global.camera.yaw)) * math.cos(math.to_radians(global.camera.pitch)),
-    }
-
-    global.camera.direction = alg.normalize(global.camera.direction)
-    previous_position   = position
-}
-
+/////////////// - Procedures - ///////////////
 process_input :: proc(window_handle: glfw.WindowHandle) 
 {
     @(static)
@@ -260,7 +222,7 @@ main :: proc()
     defer imgui.DestroyContext()
 
     imgui_io := imgui.GetIO()
-    imgui_io.ConfigFlags += {.NavEnableKeyboard, .NavEnableGamepad}
+    imgui_io.ConfigFlags += {.DockingEnable, .NavEnableKeyboard, .NavEnableGamepad}
 
     imgui.StyleColorsDark()
 
@@ -282,18 +244,17 @@ main :: proc()
     // glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
     // glw.shader_uniform_set_vec3("light_color", light_color)
 
-    glw.shader_uniform_set_vec3_f32( "material.ambient",   {1,   0.5, 0.31})
-    glw.shader_uniform_set_vec3_f32( "material.diffuse",   {1,   0.5, 0.31})
-    glw.shader_uniform_set_vec3_f32( "material.specular",  {0.5, 0.5, 0.50})
-    glw.shader_uniform_set_float("material.shininess", 32)
-    glw.shader_uniform_set_vec3_f32("light.specular",  {1.0, 1.0, 1.0})
+    // glw.shader_uniform_set_vec3_f32( "material.ambient",   {1,   0.5, 0.31})
+    // glw.shader_uniform_set_vec3_f32( "material.diffuse",   {1,   0.5, 0.31})
+    // glw.shader_uniform_set_vec3_f32( "material.specular",  {0.5, 0.5, 0.50})
+    // glw.shader_uniform_set_float("material.shininess", 32)
+    // glw.shader_uniform_set_vec3_f32("light.specular",  {1.0, 1.0, 1.0})
 
     light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
 
-    light_pos := alg.Vector3f32{}
+    light_pos := Vector3{}
 
     glw.shader_use(light_source_shader)
-    glw.shader_uniform_set_vec3_f32("light_color", {1, 1, 1})
 
     vertices := [?]f32{
         -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,
@@ -339,7 +300,7 @@ main :: proc()
         -0.5,  0.5, -0.5,  0.0,  1.0,  0.0
     }
 
-    // cube_positions := [?]alg.Vector3f32{
+    // cube_positions := [?]Vector3{
     //     { 0.0,  0.0,  0.0, },
     //     { 2.0,  5.0, -15.0,}, 
     //     {-1.5, -2.2, -2.5, }, 
@@ -478,6 +439,32 @@ main :: proc()
     last_frame:           f64
     delta_iteration_time: f64
 
+    // glw.shader_uniform_set_vec3_f32( "material.diffuse",   {1,   0.5, 0.31})
+    // glw.shader_uniform_set_vec3_f32( "material.specular",  {0.5, 0.5, 0.50})
+
+    imgui_data_filename :: "imgui_data.json"
+    default_imgui_data := Imgui_Data{
+        material_ambient  = {1,   0.5, 0.31},
+        material_diffuse  = {1,   0.5, 0.31},
+        material_specular = Vector3(0.5),
+        shininess         = f32(32),
+
+        light_color    = Vector3(1),
+        light_ambient  = {0.5, 0.5, 0.5},
+        light_diffuse  = {0.5, 0.5, 0.5},
+        light_specular = {0.5, 0.5, 0.5},
+    }
+
+    imgui_data := load_imgui_data(imgui_data_filename, default_imgui_data)
+
+    light_pos = alg.lerp(
+        light_pos,
+        global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {},
+        0.1
+    )
+
+    cube_follow_camera: bool = false
+
     for !glfw.WindowShouldClose(window_handle) {
 
         current_time         := glfw.GetTime()
@@ -486,16 +473,6 @@ main :: proc()
         fps_accumulator      += delta_iteration_time
         iteration_count      += 1
 
-        if seconds_accumulator >= 1 {
-            when PRINT_FPS
-            {
-                fmt.printfln("FPS: %v", frame_count)
-                fmt.printfln("IPS: %v", iteration_count)
-            }
-            seconds_accumulator = 0
-            frame_count         = 0
-            iteration_count     = 0
-        }
         last_time    = current_time
 
         FPS_PER_SEC :: 60
@@ -511,9 +488,11 @@ main :: proc()
             if key_pressed(glfw.KEY_ESCAPE) {
                 if glfw.GetInputMode(window_handle, glfw.CURSOR) == glfw.CURSOR_DISABLED {
                     glfw.SetInputMode(window_handle, glfw.CURSOR, glfw.CURSOR_NORMAL)
+                    global.mouse.mode = .free
                 }
                 else {
                     glfw.SetInputMode(window_handle, glfw.CURSOR, glfw.CURSOR_DISABLED)
+                    global.mouse.mode = .locked
                 }
             }
 
@@ -522,12 +501,35 @@ main :: proc()
             imgui.NewFrame()
 
             if imgui.Begin("Panel") {
+                if imgui.Button("Reset") {
+                    imgui_data = default_imgui_data
+                }
+                imgui.SameLine()
                 if imgui.Button("Quit") {
                     glfw.SetWindowShouldClose(window_handle, true)
                 }
-            }
+                imgui.ColorEdit3("Material ambient",  &imgui_data.material_ambient)
+                imgui.ColorEdit3("Material diffuse",  &imgui_data.material_diffuse)
+                imgui.ColorEdit3("Material specular", &imgui_data.material_specular)
+                imgui.SliderFloat("Shininess",        &imgui_data.shininess, 0, f32(u32(1) << 10))
 
+                imgui.Spacing()
+                imgui.ColorEdit3("Light color",    &imgui_data.light_color)
+                imgui.ColorEdit3("Light ambient",  &imgui_data.light_ambient)
+                imgui.ColorEdit3("Light diffuse",  &imgui_data.light_diffuse)
+                imgui.ColorEdit3("Light specular", &imgui_data.light_specular)
+
+                imgui.Text("FPS: %.2f", imgui_io.Framerate)
+                // imgui.Text("FPS: %.2f", iteration_count)
+            }
             imgui.End()
+
+            // if imgui.Begin("Other") {
+            //     if imgui.Button("Quit") {
+            //         glfw.SetWindowShouldClose(window_handle, true)
+            //     }
+            // }
+            // imgui.End()
 
             display_w, display_h := glfw.GetFramebufferSize(window_handle)
             gl.Viewport(0, 0, display_w, display_h)
@@ -555,18 +557,24 @@ main :: proc()
 
             glw.shader_use(lighting_shader)
 
-            light_color := alg.Vector3f32{
-                // cast(f32)math.sin(glfw.GetTime() * 2),
-                // cast(f32)math.sin(glfw.GetTime() * 0.7),
-                // cast(f32)math.sin(glfw.GetTime() * 1.3)
-                1, 1, 1
-            }
+            // light_color := Vector3{
+            //     // cast(f32)math.sin(glfw.GetTime() * 2),
+            //     // cast(f32)math.sin(glfw.GetTime() * 0.7),
+            //     // cast(f32)math.sin(glfw.GetTime() * 1.3)
+            //     1, 1, 1
+            // }
 
-            diffuse_color := light_color   * alg.Vector3f32{0.5, 0.5, 0.5}
-            ambient_color := diffuse_color * alg.Vector3f32{0.2, 0.2, 0.2}
+            // ambient_color := light_color * (Vector3{} + ambient_factor)
+            // diffuse_color := light_color * (Vector3{} + diffuse_factor)
+            glw.shader_uniform_set_vec3("material.ambient",    imgui_data.material_ambient)
+            glw.shader_uniform_set_vec3("material.diffuse",    imgui_data.material_diffuse)
+            glw.shader_uniform_set_vec3("material.specular",   imgui_data.material_specular)
+            glw.shader_uniform_set_float("material.shininess", imgui_data.shininess)
 
-            glw.shader_uniform_set_vec3("light.ambient",   ambient_color)
-            glw.shader_uniform_set_vec3("light.diffuse",   diffuse_color)
+            glw.shader_uniform_set_vec3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vec3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vec3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
+
 
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
@@ -583,16 +591,24 @@ main :: proc()
             draw_cube()
 
             glw.shader_use(light_source_shader)
+            glw.shader_uniform_set_vec3_f32("light_color", imgui_data.light_color)
+
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
 
+            if key_pressed(glfw.KEY_F) {
+                cube_follow_camera = !cube_follow_camera
+            }
+
             // thingy_mabob := f32(1 - math.exp(-120 * global.dt))
             model_mat = alg.MATRIX4F32_IDENTITY
-            light_pos = alg.lerp(
-                light_pos,
-                global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {},
-                0.1
-            )
+            if cube_follow_camera {
+                light_pos = alg.lerp(
+                    light_pos,
+                    global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {},
+                    0.1
+                )
+            }
             model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
             model_mat = alg.matrix4_translate_f32(light_pos) * model_mat
             glw.shader_uniform_set("model",      &model_mat)
@@ -609,5 +625,19 @@ main :: proc()
             glfw.SwapBuffers(window_handle)
         }
 
+        if seconds_accumulator >= 1 {
+            when PRINT_FPS
+            {
+                fmt.printfln("FPS: %v", frame_count)
+                fmt.printfln("IPS: %v", iteration_count)
+            }
+
+            imgui_io.Framerate  = f32(frame_count)
+            seconds_accumulator = 0
+            frame_count         = 0
+            iteration_count     = 0
+        }
     }
+
+    fmt.printfln("Saving imgui_data... err: %v", save_imgui_data(imgui_data_filename, imgui_data))
 }

@@ -5,7 +5,7 @@ version: '3'
 vars:
   flags:
     "
-    -define:print_fps=true
+    -define:print_fps=false
     -define:shader_diagnostics=false
     -o:none
     "
