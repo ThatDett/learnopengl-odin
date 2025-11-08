@@ -16,8 +16,6 @@ Imgui_Error :: enum
 /////////////// - Structs - ///////////////
 Imgui_Data :: struct
 {
-    material_ambient:  Vector3,
-    material_diffuse:  Vector3,
     material_specular: Vector3,
     shininess:         f32,
 

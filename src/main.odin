@@ -51,6 +51,11 @@ Dimensions :: struct
     width, height: f32
 }
 
+Dimensions_i32 :: struct
+{
+    width, height: i32
+}
+
 Camera :: struct
 {
     using position: Vector3,
@@ -86,7 +91,9 @@ GL_MAJOR_VERSION :: 3
 GL_MINOR_VERSION :: 3
 
 WINDOW_NAME         :: "Learning OpenGL"
-WINDOW_DEFAULT_SIZE :: Dimensions{1366/1, 768/1}
+WINDOW_DEFAULT_SIZE :: Dimensions{1280/1, 720/1}
+
+FPS_PER_SEC    :: 60
 
 CAMERA_MAX_FOV :: 45
 CAMERA_MIN_FOV :: 1
@@ -127,7 +134,7 @@ process_input :: proc(window_handle: glfw.WindowHandle)
 
 camera_movement :: proc "contextless" () -> f32
 {
-    camera_speed := f32(f64(global.camera.speed) * global.dt)
+    camera_speed := global.camera.speed * f32(global.dt)
     direction    := global.camera.direction
     if (global.camera.movement_mode == .fly)
     {
@@ -165,6 +172,14 @@ key_held :: #force_inline proc "contextless" (key: c.int, caller_location := #ca
 {
     assert_contextless(key >= 0 && key <= glfw.KEY_LAST, "Invalid key", caller_location)
     return global.key_pressed[key] == .held
+}
+
+vector_lerp :: #force_inline proc "contextless" (vector1, vector2: $T/[$N]$E, t: f32) -> T
+{
+    return alg.lerp(
+        vector1, vector2,
+        f32(1 - math.exp(-60 * t * f32(global.dt)))
+    )
 }
 
 main :: proc() 
@@ -243,77 +258,64 @@ main :: proc()
     }
     
     glw.shader_use(lighting_shader)
-    // glw.shader_uniform_set_vec3("object_color", {1, 0.5, 0.31})
-    // glw.shader_uniform_set_vec3("light_color", light_color)
+    glw.shader_uniform_set("material.diffuse",  0)
+    glw.shader_uniform_set("material.specular", 1)
+    // glw.shader_uniform_set_vector3("object_color", {1, 0.5, 0.31})
+    // glw.shader_uniform_set_vector3("light_color", light_color)
 
-    // glw.shader_uniform_set_vec3_f32( "material.ambient",   {1,   0.5, 0.31})
-    // glw.shader_uniform_set_vec3_f32( "material.diffuse",   {1,   0.5, 0.31})
-    // glw.shader_uniform_set_vec3_f32( "material.specular",  {0.5, 0.5, 0.50})
+    // glw.shader_uniform_set_vector3_f32( "material.ambient",   {1,   0.5, 0.31})
+    // glw.shader_uniform_set_vector3_f32( "material.diffuse",   {1,   0.5, 0.31})
+    // glw.shader_uniform_set_vector3_f32( "material.specular",  {0.5, 0.5, 0.50})
     // glw.shader_uniform_set_float("material.shininess", 32)
-    // glw.shader_uniform_set_vec3_f32("light.specular",  {1.0, 1.0, 1.0})
+    // glw.shader_uniform_set_vector3_f32("light.specular",  {1.0, 1.0, 1.0})
 
-    light_source_shader, ok = glw.shader_create("white")
-
-    light_pos := Vector3{}
-
-    glw.shader_use(light_source_shader)
+    light_source_shader, ok  = glw.shader_create("white")
+    light_pos               := Vector3{}
 
     vertices := [?]f32{
-        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,
-         0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 
-         0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
-         0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
-        -0.5,  0.5, -0.5,  0.0,  0.0, -1.0, 
-        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0, 
+        // positions       // normals        // texture coords
+        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,  0.0, 0.0,
+         0.5, -0.5, -0.5,  0.0,  0.0, -1.0,  1.0, 0.0,
+         0.5,  0.5, -0.5,  0.0,  0.0, -1.0,  1.0, 1.0,
+         0.5,  0.5, -0.5,  0.0,  0.0, -1.0,  1.0, 1.0,
+        -0.5,  0.5, -0.5,  0.0,  0.0, -1.0,  0.0, 1.0,
+        -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,  0.0, 0.0,
 
-        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
-         0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
-         0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
-         0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
-        -0.5,  0.5,  0.5,  0.0,  0.0, 1.0,
-        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,   0.0, 0.0,
+         0.5, -0.5,  0.5,  0.0,  0.0, 1.0,   1.0, 0.0,
+         0.5,  0.5,  0.5,  0.0,  0.0, 1.0,   1.0, 1.0,
+         0.5,  0.5,  0.5,  0.0,  0.0, 1.0,   1.0, 1.0,
+        -0.5,  0.5,  0.5,  0.0,  0.0, 1.0,   0.0, 1.0,
+        -0.5, -0.5,  0.5,  0.0,  0.0, 1.0,   0.0, 0.0,
 
-        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,
-        -0.5,  0.5, -0.5, -1.0,  0.0,  0.0,
-        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,
-        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,
-        -0.5, -0.5,  0.5, -1.0,  0.0,  0.0,
-        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,
+        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,  1.0, 0.0,
+        -0.5,  0.5, -0.5, -1.0,  0.0,  0.0,  1.0, 1.0,
+        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,  0.0, 1.0,
+        -0.5, -0.5, -0.5, -1.0,  0.0,  0.0,  0.0, 1.0,
+        -0.5, -0.5,  0.5, -1.0,  0.0,  0.0,  0.0, 0.0,
+        -0.5,  0.5,  0.5, -1.0,  0.0,  0.0,  1.0, 0.0,
 
-         0.5,  0.5,  0.5,  1.0,  0.0,  0.0,
-         0.5,  0.5, -0.5,  1.0,  0.0,  0.0,
-         0.5, -0.5, -0.5,  1.0,  0.0,  0.0,
-         0.5, -0.5, -0.5,  1.0,  0.0,  0.0,
-         0.5, -0.5,  0.5,  1.0,  0.0,  0.0,
-         0.5,  0.5,  0.5,  1.0,  0.0,  0.0,
+         0.5,  0.5,  0.5,  1.0,  0.0,  0.0,  1.0, 0.0,
+         0.5,  0.5, -0.5,  1.0,  0.0,  0.0,  1.0, 1.0,
+         0.5, -0.5, -0.5,  1.0,  0.0,  0.0,  0.0, 1.0,
+         0.5, -0.5, -0.5,  1.0,  0.0,  0.0,  0.0, 1.0,
+         0.5, -0.5,  0.5,  1.0,  0.0,  0.0,  0.0, 0.0,
+         0.5,  0.5,  0.5,  1.0,  0.0,  0.0,  1.0, 0.0,
 
-        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
-         0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
-         0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
-         0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
-        -0.5, -0.5,  0.5,  0.0, -1.0,  0.0,
-        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,
+        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,  0.0, 1.0,
+         0.5, -0.5, -0.5,  0.0, -1.0,  0.0,  1.0, 1.0,
+         0.5, -0.5,  0.5,  0.0, -1.0,  0.0,  1.0, 0.0,
+         0.5, -0.5,  0.5,  0.0, -1.0,  0.0,  1.0, 0.0,
+        -0.5, -0.5,  0.5,  0.0, -1.0,  0.0,  0.0, 0.0,
+        -0.5, -0.5, -0.5,  0.0, -1.0,  0.0,  0.0, 1.0,
 
-        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0,
-         0.5,  0.5, -0.5,  0.0,  1.0,  0.0,
-         0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
-         0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
-        -0.5,  0.5,  0.5,  0.0,  1.0,  0.0,
-        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0
+        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0,  0.0, 1.0,
+         0.5,  0.5, -0.5,  0.0,  1.0,  0.0,  1.0, 1.0,
+         0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  1.0, 0.0,
+         0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  1.0, 0.0,
+        -0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  0.0, 0.0,
+        -0.5,  0.5, -0.5,  0.0,  1.0,  0.0,  0.0, 1.0
     }
-
-    // cube_positions := [?]Vector3{
-    //     { 0.0,  0.0,  0.0, },
-    //     { 2.0,  5.0, -15.0,}, 
-    //     {-1.5, -2.2, -2.5, }, 
-    //     {-3.8, -2.0, -12.3,},  
-    //     { 2.4, -0.4, -3.5, }, 
-    //     {-1.7,  3.0, -7.5, }, 
-    //     { 1.3, -2.0, -2.5, }, 
-    //     { 1.5,  2.0, -2.5, },
-    //     { 1.5,  0.2, -1.5, },
-    //     {-1.3,  1.0, -1.5  },
-    // }
 
     vertex_indices := [?]u32{
         0, 1, 3,
@@ -322,28 +324,21 @@ main :: proc()
 
     stbi.set_flip_vertically_on_load(c.int(true))
 
-    width, height, number_of_channels: c.int = ---, ---, ---
-    image_name  := cstring("res/images/container.jpg");
-    data        := stbi.load(image_name, &width, &height, &number_of_channels, 0)
-    if data == nil {
-        fmt.eprintfln("Could not load %v", image_name)
+    container: glw.Image = ---
+    container, ok = glw.load_image("res/images/container2.png")
+    if !ok {
+        fmt.eprintln("Couldn't load container image")
         return
     }
+
+    container_specular: glw.Image = ---
+    container_specular, ok = glw.load_image("res/images/container2_specular.png")
+    if !ok {
+        fmt.eprintln("Couldn't load container specular image")
+        return
+    }
+
     // defer stbi.image_free(data) // Leaking is fine, let OS clean stuff
-
-    // texture: u32 = ---
-    // gl.GenTextures(1, &texture)
-    // gl.ActiveTexture(gl.TEXTURE0) // Default texture unit
-    // gl.BindTexture(gl.TEXTURE_2D, texture)
-
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.MIRRORED_REPEAT);
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.MIRRORED_REPEAT);
-    //
-    // gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGB, gl.UNSIGNED_BYTE, data)
-    // gl.GenerateMipmap(gl.TEXTURE_2D)
-
 
     // gl.GenTextures(1, &texture)
     // gl.ActiveTexture(gl.TEXTURE1)
@@ -375,17 +370,27 @@ main :: proc()
         glw.shader_delete(light_source_shader)
     }
 
+    glw.create_texture(container,          0)
+    glw.create_texture(container_specular, 1)
+
     gl.BindVertexArray(light_vao)
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
+    gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices), &vertices, gl.STATIC_DRAW)
 
-    stride: i32 = 6 * size_of(f32)
+    stride: i32 = 8 * size_of(f32)
     gl.VertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, stride, 0)
     gl.EnableVertexAttribArray(0)
 
+    // gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
+    // gl.EnableVertexAttribArray(1)
+
+    // gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, stride, 6 * size_of(f32))
+    // gl.EnableVertexAttribArray(2)
+
     gl.BindVertexArray(vao)
 
+
     gl.BindBuffer(gl.ARRAY_BUFFER, vbo)
-    gl.BufferData(gl.ARRAY_BUFFER, size_of(vertices), &vertices, gl.STATIC_DRAW)
 
     // gl.BindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo)
     // gl.BufferData(gl.ELEMENT_ARRAY_BUFFER, size_of(vertex_indices), &vertex_indices, gl.STATIC_DRAW)
@@ -396,17 +401,14 @@ main :: proc()
     gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
     gl.EnableVertexAttribArray(1)
 
-    // gl.VertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
-    // gl.EnableVertexAttribArray(1)
+    gl.VertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, stride, 6 * size_of(f32))
+    gl.EnableVertexAttribArray(2)
 
-    // gl.VertexAttribPointer(1, 2, gl.FLOAT, gl.FALSE, stride, 3 * size_of(f32))
-    // gl.EnableVertexAttribArray(1)
+    gl.Enable(gl.DEPTH_TEST)
 
     model_mat:      alg.Matrix4x4f32 = --- 
     view_mat:       alg.Matrix4x4f32 = --- 
     projection_mat: alg.Matrix4x4f32 = --- 
-
-    gl.Enable(gl.DEPTH_TEST)
 
     //Init camera
     {
@@ -441,13 +443,11 @@ main :: proc()
     last_frame:           f64
     delta_iteration_time: f64
 
-    // glw.shader_uniform_set_vec3_f32( "material.diffuse",   {1,   0.5, 0.31})
-    // glw.shader_uniform_set_vec3_f32( "material.specular",  {0.5, 0.5, 0.50})
+    // glw.shader_uniform_set_vector3_f32( "material.diffuse",   {1,   0.5, 0.31})
+    // glw.shader_uniform_set_vector3_f32( "material.specular",  {0.5, 0.5, 0.50})
 
     imgui_data_filename :: "imgui_data.json"
     default_imgui_data := Imgui_Data{
-        material_ambient  = {1,   0.5, 0.31},
-        material_diffuse  = {1,   0.5, 0.31},
         material_specular = Vector3(0.5),
         shininess         = f32(32),
 
@@ -459,7 +459,7 @@ main :: proc()
 
     imgui_data := load_imgui_data(imgui_data_filename, default_imgui_data)
 
-    light_pos = alg.lerp(
+    light_pos = vector_lerp(
         light_pos,
         global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {},
         0.1
@@ -468,7 +468,8 @@ main :: proc()
     cube_follow_camera: bool   = false
     fmt_str:            string
 
-    fmt_buffer: [10 + 1]u8
+    // fmt_buffer: [10 + 1]u8
+    imgui_iteration_count: u32
     for !glfw.WindowShouldClose(window_handle) {
         current_time         := glfw.GetTime()
         delta_iteration_time  = current_time - last_time
@@ -478,7 +479,6 @@ main :: proc()
 
         last_time    = current_time
 
-        FPS_PER_SEC :: 60
         if fps_accumulator >= 1.0/FPS_PER_SEC {
             glfw.PollEvents()
 
@@ -511,9 +511,8 @@ main :: proc()
                 if imgui.Button("Quit") {
                     glfw.SetWindowShouldClose(window_handle, true)
                 }
-                imgui.ColorEdit3("Material ambient",  &imgui_data.material_ambient)
-                imgui.ColorEdit3("Material diffuse",  &imgui_data.material_diffuse)
-                imgui.ColorEdit3("Material specular", &imgui_data.material_specular)
+
+                // imgui.ColorEdit3("Material specular", &imgui_data.material_specular)
                 imgui.SliderFloat("Shininess",        &imgui_data.shininess, 0, f32(u32(1) << 10))
 
                 imgui.Spacing()
@@ -522,23 +521,14 @@ main :: proc()
                 imgui.ColorEdit3("Light diffuse",  &imgui_data.light_diffuse)
                 imgui.ColorEdit3("Light specular", &imgui_data.light_specular)
 
-
-                // fmt.println(cast(string)buffer[:])
-                imgui.Text("FPS: %.2f | Iterations Per Second: %s", imgui_io.Framerate, cast(string)fmt_buffer[:])
+                // imgui.Text("FPS: %.2f | Iterations Per Second: %s", imgui_io.Framerate, cast(string)fmt_buffer[:])
+                imgui.Text("FPS: %.2f | Iterations Per Second: %d", imgui_io.Framerate, imgui_iteration_count)
                 // imgui.Text("FPS: %.2f", iteration_count)
             }
             imgui.End()
 
-            // if imgui.Begin("Other") {
-            //     if imgui.Button("Quit") {
-            //         glfw.SetWindowShouldClose(window_handle, true)
-            //     }
-            // }
-            // imgui.End()
-
-            display_w, display_h := glfw.GetFramebufferSize(window_handle)
-            gl.Viewport(0, 0, display_w, display_h)
-            // gl.ClearColor(0, 0, 0, 1)
+            // display_w, display_h := glfw.GetFramebufferSize(window_handle)
+            // gl.Viewport(0, 0, display_w, display_h)
             gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
             frame_count     += 1
@@ -558,23 +548,12 @@ main :: proc()
 
             glw.shader_use(lighting_shader)
 
-            // light_color := Vector3{
-            //     // cast(f32)math.sin(glfw.GetTime() * 2),
-            //     // cast(f32)math.sin(glfw.GetTime() * 0.7),
-            //     // cast(f32)math.sin(glfw.GetTime() * 1.3)
-            //     1, 1, 1
-            // }
-
-            // ambient_color := light_color * (Vector3{} + ambient_factor)
-            // diffuse_color := light_color * (Vector3{} + diffuse_factor)
-            glw.shader_uniform_set_vec3("material.ambient",    imgui_data.material_ambient)
-            glw.shader_uniform_set_vec3("material.diffuse",    imgui_data.material_diffuse)
-            glw.shader_uniform_set_vec3("material.specular",   imgui_data.material_specular)
+            // glw.shader_uniform_set_vector3("material.specular",imgui_data.material_specular)
             glw.shader_uniform_set_float("material.shininess", imgui_data.shininess)
 
-            glw.shader_uniform_set_vec3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
-            glw.shader_uniform_set_vec3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
-            glw.shader_uniform_set_vec3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
 
 
             glw.shader_uniform_set("projection", &projection_mat)
@@ -598,7 +577,7 @@ main :: proc()
             draw_cube()
 
             glw.shader_use(light_source_shader)
-            glw.shader_uniform_set_vec3_f32("light_color", imgui_data.light_color)
+            glw.shader_uniform_set_vector3_f32("light_color", imgui_data.light_color)
 
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
@@ -607,12 +586,11 @@ main :: proc()
                 cube_follow_camera = !cube_follow_camera
             }
 
-            // thingy_mabob := f32(1 - math.exp(-120 * global.dt))
             if cube_follow_camera {
                 light_pos = alg.lerp(
                     light_pos,
                     global.camera.position + global.camera.direction * f32(CAMERA_MAX_FOV)/global.camera.fov + {},
-                    0.1
+                    f32(1 - math.exp(-5 * global.dt))
                 )
             }
 
@@ -638,21 +616,23 @@ main :: proc()
                 fmt.printfln("IPS: %v", iteration_count)
             }
 
-            imgui_io.Framerate = f32(frame_count)
-            fmt_str            = fmt.aprintf("%v", iteration_count)
-            defer delete(fmt_str)
+            imgui_io.Framerate    = f32(frame_count)
+            imgui_iteration_count = iteration_count
+            // fmt_str            = fmt.aprintf("%v", iteration_count)
+            // defer delete(fmt_str)
 
-            comma_count := 0
-            for i := 0; i < len(fmt_str) + 2; i += 1 {
-                if i == 2 || i == 6 || i == 7 {
-                    fmt_buffer[i] = '.'
-                    i += 1
-                    comma_count += 1
-                    fmt_buffer[i] = cast(u8)fmt_str[i - comma_count]
-                    continue
-                }
-                fmt_buffer[i] = cast(u8)fmt_str[i - comma_count]
-            }
+
+            // comma_count := 0
+            // for i := 0; i < len(fmt_str) + 2; i += 1 {
+            //     if i == 2 || i == 6 || i == 7 {
+            //         fmt_buffer[i] = '.'
+            //         i += 1
+            //         comma_count += 1
+            //         fmt_buffer[i] = cast(u8)fmt_str[i - comma_count]
+            //         continue
+            //     }
+            //     fmt_buffer[i] = cast(u8)fmt_str[i - comma_count]
+            // }
 
             seconds_accumulator = 0
             frame_count         = 0

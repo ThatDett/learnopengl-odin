@@ -149,18 +149,18 @@ shader_create :: proc(shader_folder: string) -> (shader: Shader, ok: bool)
     return shader, ok
 }
 
-shader_use :: proc "contextless" (shader: Shader)
+shader_use :: #force_inline proc "contextless" (shader: Shader)
 {
     gl.UseProgram(shader.id)
     current_shader = shader
 }
 
-shader_delete :: proc "contextless" (shader: Shader)
+shader_delete :: #force_inline proc "contextless" (shader: Shader)
 {
     gl.DeleteShader(shader.id)
 }
 
-shader_uniform_set_int :: proc "contextless" (name: cstring, value: i32) -> (ok: bool)
+shader_uniform_set_int :: #force_inline proc "contextless" (name: cstring, value: i32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -168,7 +168,7 @@ shader_uniform_set_int :: proc "contextless" (name: cstring, value: i32) -> (ok:
     return ok
 }
 
-shader_uniform_set_float :: proc "contextless" (name: cstring, value: f32) -> (ok: bool)
+shader_uniform_set_float :: #force_inline proc "contextless" (name: cstring, value: f32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -176,7 +176,7 @@ shader_uniform_set_float :: proc "contextless" (name: cstring, value: f32) -> (o
     return ok
 }
 
-shader_uniform_set_vec3_f32 :: proc "contextless" (name: cstring, value: linalg.Vector3f32) -> (ok: bool)
+shader_uniform_set_vector3_f32 :: #force_inline proc "contextless" (name: cstring, value: linalg.Vector3f32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -184,7 +184,7 @@ shader_uniform_set_vec3_f32 :: proc "contextless" (name: cstring, value: linalg.
     return ok
 }
 
-shader_uniform_set_vec3_f64 :: proc "contextless" (name: cstring, value: linalg.Vector3f64) -> (ok: bool)
+shader_uniform_set_vector3_f64 :: #force_inline proc "contextless" (name: cstring, value: linalg.Vector3f64) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -192,7 +192,7 @@ shader_uniform_set_vec3_f64 :: proc "contextless" (name: cstring, value: linalg.
     return ok
 }
 
-shader_uniform_set_matrix4_f32 :: proc "contextless" (name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
+shader_uniform_set_matrix4_f32 :: #force_inline proc "contextless" (name: cstring, value: ^linalg.Matrix4f32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -200,7 +200,7 @@ shader_uniform_set_matrix4_f32 :: proc "contextless" (name: cstring, value: ^lin
     return ok
 }
 
-shader_uniform_set_matrix4_f64 :: proc "contextless" (name: cstring, value: ^linalg.Matrix4f64) -> (ok: bool)
+shader_uniform_set_matrix4_f64 :: #force_inline proc "contextless" (name: cstring, value: ^linalg.Matrix4f64) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)
     ok                = uniform_location != -1
@@ -208,9 +208,9 @@ shader_uniform_set_matrix4_f64 :: proc "contextless" (name: cstring, value: ^lin
     return ok
 }
 
-shader_uniform_set_vec3 :: proc{
-    shader_uniform_set_vec3_f32,
-    shader_uniform_set_vec3_f64,
+shader_uniform_set_vector3 :: proc{
+    shader_uniform_set_vector3_f32,
+    shader_uniform_set_vector3_f64,
 }
 
 shader_uniform_set_matrix4 :: proc{
@@ -218,12 +218,11 @@ shader_uniform_set_matrix4 :: proc{
     shader_uniform_set_matrix4_f64,
 }
 
-shader_uniform_set :: proc
-{
+shader_uniform_set :: proc{
     shader_uniform_set_int,
     shader_uniform_set_float,
-    shader_uniform_set_vec3_f32,
-    shader_uniform_set_vec3_f64,
+    shader_uniform_set_vector3_f32,
+    shader_uniform_set_vector3_f64,
     shader_uniform_set_matrix4_f32,
     shader_uniform_set_matrix4_f64,
 }
