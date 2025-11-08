@@ -1,12 +1,12 @@
 package learn_opengl
 
-import     "core:c"
-import     "core:fmt"
-import     "core:math"
-import alg "core:math/linalg"
-import     "core:log" 
-import     "core:os"
-import     "core:encoding/json"
+import      "core:c"
+import      "core:fmt"
+import      "core:math"
+import alg  "core:math/linalg"
+import      "core:log" 
+import      "core:os"
+import      "core:encoding/json"
 
 import      "vendor:glfw"
 import gl   "vendor:OpenGL"
@@ -19,6 +19,7 @@ import imgui_glfw "dependencies:imgui/imgui_impl_glfw"
 // import imgui      "external/odin-imgui"
 // import imgui_gl   "external/odin-imgui/impl/opengl"
 // import imgui_glfw "external/odin-imgui/impl/glfw"
+
 
 /////////////// - Enums - ///////////////
 Key_State :: enum u8
@@ -78,7 +79,8 @@ Mouse :: struct
 }
 
 /////////////// - Constants - ///////////////
-PRINT_FPS :: #config(print_fps, false)
+SHOW_DIAGNOSTICS :: #config(show_diagnostics, true)
+PRINT_FPS        :: #config(print_fps, false)
 
 GL_MAJOR_VERSION :: 3
 GL_MINOR_VERSION :: 3
@@ -235,7 +237,7 @@ main :: proc()
     ok: bool = ---
 
     lighting_shader, light_source_shader: glw.Shader = ---, ---
-    lighting_shader, ok = glw.shader_create("res/shaders/vs_basic.glsl", "res/shaders/fs_basic.glsl")
+    lighting_shader, ok = glw.shader_create("basic")
     if !ok {
         return
     }
@@ -250,7 +252,7 @@ main :: proc()
     // glw.shader_uniform_set_float("material.shininess", 32)
     // glw.shader_uniform_set_vec3_f32("light.specular",  {1.0, 1.0, 1.0})
 
-    light_source_shader, ok = glw.shader_create("res/shaders/vs_white.glsl", "res/shaders/fs_white.glsl")
+    light_source_shader, ok = glw.shader_create("white")
 
     light_pos := Vector3{}
 
@@ -463,10 +465,11 @@ main :: proc()
         0.1
     )
 
-    cube_follow_camera: bool = false
+    cube_follow_camera: bool   = false
+    fmt_str:            string
 
+    fmt_buffer: [10 + 1]u8
     for !glfw.WindowShouldClose(window_handle) {
-
         current_time         := glfw.GetTime()
         delta_iteration_time  = current_time - last_time
         seconds_accumulator  += delta_iteration_time
@@ -519,7 +522,9 @@ main :: proc()
                 imgui.ColorEdit3("Light diffuse",  &imgui_data.light_diffuse)
                 imgui.ColorEdit3("Light specular", &imgui_data.light_specular)
 
-                imgui.Text("FPS: %.2f", imgui_io.Framerate)
+
+                // fmt.println(cast(string)buffer[:])
+                imgui.Text("FPS: %.2f | Iterations Per Second: %s", imgui_io.Framerate, cast(string)fmt_buffer[:])
                 // imgui.Text("FPS: %.2f", iteration_count)
             }
             imgui.End()
@@ -549,10 +554,6 @@ main :: proc()
                     0.1, 
                     100
                 )
-                // coiso := f32(5)
-                // projection_mat = alg.matrix_ortho3d_f32(
-                //     -coiso, coiso, -coiso, coiso, -coiso, coiso * 4
-                // )
             }
 
             glw.shader_use(lighting_shader)
@@ -590,6 +591,12 @@ main :: proc()
 
             draw_cube()
 
+            model_mat = alg.MATRIX4F32_IDENTITY
+            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+            model_mat = alg.matrix4_translate_f32({8, 0, 2})   * model_mat
+            glw.shader_uniform_set("model",      &model_mat)
+            draw_cube()
+
             glw.shader_use(light_source_shader)
             glw.shader_uniform_set_vec3_f32("light_color", imgui_data.light_color)
 
@@ -601,7 +608,6 @@ main :: proc()
             }
 
             // thingy_mabob := f32(1 - math.exp(-120 * global.dt))
-            model_mat = alg.MATRIX4F32_IDENTITY
             if cube_follow_camera {
                 light_pos = alg.lerp(
                     light_pos,
@@ -609,10 +615,11 @@ main :: proc()
                     0.1
                 )
             }
-            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-            model_mat = alg.matrix4_translate_f32(light_pos) * model_mat
-            glw.shader_uniform_set("model",      &model_mat)
 
+            model_mat = alg.MATRIX4F32_IDENTITY
+            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
+            model_mat = alg.matrix4_translate_f32(light_pos)   * model_mat
+            glw.shader_uniform_set("model",      &model_mat)
 
             gl.BindVertexArray(light_vao)
             draw_cube()
@@ -626,18 +633,34 @@ main :: proc()
         }
 
         if seconds_accumulator >= 1 {
-            when PRINT_FPS
-            {
+            when PRINT_FPS {
                 fmt.printfln("FPS: %v", frame_count)
                 fmt.printfln("IPS: %v", iteration_count)
             }
 
-            imgui_io.Framerate  = f32(frame_count)
+            imgui_io.Framerate = f32(frame_count)
+            fmt_str            = fmt.aprintf("%v", iteration_count)
+            defer delete(fmt_str)
+
+            comma_count := 0
+            for i := 0; i < len(fmt_str) + 2; i += 1 {
+                if i == 2 || i == 6 || i == 7 {
+                    fmt_buffer[i] = '.'
+                    i += 1
+                    comma_count += 1
+                    fmt_buffer[i] = cast(u8)fmt_str[i - comma_count]
+                    continue
+                }
+                fmt_buffer[i] = cast(u8)fmt_str[i - comma_count]
+            }
+
             seconds_accumulator = 0
             frame_count         = 0
             iteration_count     = 0
         }
     }
 
-    fmt.printfln("Saving imgui_data... err: %v", save_imgui_data(imgui_data_filename, imgui_data))
+    when SHOW_DIAGNOSTICS {
+        fmt.printfln("Saving imgui_data... err: %v", save_imgui_data(imgui_data_filename, imgui_data))
+    }
 }

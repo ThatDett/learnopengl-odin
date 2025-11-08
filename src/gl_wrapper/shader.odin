@@ -1,14 +1,15 @@
 package gl_wrapper
 
-import "core:os"
-import "core:fmt"
-import "core:math"
-import "core:math/linalg"
+import      "core:os"
+import      "core:fmt"
+import      "core:math"
+import      "core:math/linalg"
+import path "core:path/filepath"
+import      "core:strings"
 
 import gl "vendor:OpenGL"
 
 SHOW_SHADER_DIAGNOSTICS :: #config(shader_diagnostics, true)
-// SHOW_SHADER_DIAGNOSTICS :: false
 
 Handle :: u32
 
@@ -43,74 +44,89 @@ when SHOW_SHADER_DIAGNOSTICS
     return ok
 }
 
-@(require_results)
-shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shader: Shader, ok: bool)
+@(private)
+shader_init :: proc(shader_path: string) -> (shader: Handle, ok: bool)
 {
-    vertex_shader, fragment_shader: Handle
-    file, err := os.open(vertex_shader_path)
+    dir, filename := path.split(shader_path)
+    shader_type   := u32(gl.VERTEX_SHADER)
+    prefix        := filename[:2]
+    if strings.compare(prefix, "fs") == 0 {
+        shader_type = gl.FRAGMENT_SHADER
+    }
+
+    file, err := os.open(shader_path)
     {
         defer os.close(file)
         if err != nil {
-            fmt.eprintfln("Could not open %v", vertex_shader_path)
-            return
+            fmt.eprintfln("Could not open %v", shader_path)
+            return shader, ok
         }
 
         file_contents, read_ok := os.read_entire_file_from_handle(file)
         defer delete(file_contents) 
         if !read_ok {
-            fmt.eprintfln("Could not read file contents of %v", vertex_shader_path)
-            return
+            fmt.eprintfln("Could not read file contents of %v", shader_path)
+            return shader, ok
         }
 
         cstr := cstring(raw_data(file_contents))
-        vertex_shader = gl.CreateShader(gl.VERTEX_SHADER)
-        gl.ShaderSource(vertex_shader, 1, &cstr, nil)
-        gl.CompileShader(vertex_shader)
+        shader = gl.CreateShader(shader_type)
+        gl.ShaderSource(shader, 1, &cstr, nil)
+        gl.CompileShader(shader)
     }
 
     buffer: [256]byte = ---
     when SHOW_SHADER_DIAGNOSTICS 
     {
-        fmt.printf("Diagnostics for %v: ", vertex_shader_path)
+        fmt.printf("Diagnostics for %v: ", shader_path)
     }
-    shader_diagnostic(vertex_shader, buffer[:]) or_return
+    shader_diagnostic(shader, buffer[:]) or_return
 
-    file, err = os.open(fragment_shader_path)
-    {
-        defer os.close(file)
-        if err != nil {
-            fmt.eprintfln("Could not open %v", fragment_shader_path)
-            return
-        }
+    ok = true
+    return shader, ok
+}
 
-        file_contents, read_ok := os.read_entire_file_from_handle(file)
-        defer delete(file_contents) 
-        if !read_ok {
-            fmt.eprintfln("Could not read file contents of %v", fragment_shader_path)
-            return
-        }
+/*
+ * Creates a shader program by compiling and linking the .glsl files inside the specified folder,
+   the folder must contain two files, with each prefixed with its type: vs_foo.glsl, fs_foo.glsl
 
-        cstr := cstring(raw_data(file_contents))
-        fragment_shader = gl.CreateShader(gl.FRAGMENT_SHADER)
-        gl.ShaderSource(fragment_shader, 1, &cstr, nil)
-        gl.CompileShader(fragment_shader)
+ * Usage: shader_create("shader_folder")
+ */
+@(require_results)
+shader_create :: proc(shader_folder: string) -> (shader: Shader, ok: bool)
+{
+    shader_path := strings.join({"res/shaders/", shader_folder, "/"}, "")
+    defer delete(shader_path)
+
+    directory   := path.dir(shader_path)
+    glob        := path.join({directory, "*.glsl"})
+    defer delete(glob)
+
+    shader_names, err := path.glob(glob)
+    if err != nil {
+        return {}, false
+    }
+    
+    if len(shader_names) != 2 {
+        return {}, false
     }
 
-    // fmt.printfln("%v", buffer)
-    when SHOW_SHADER_DIAGNOSTICS 
-    {
-        fmt.printf("Diagnostics for %v: ", fragment_shader_path)
-    }
-    shader_diagnostic(fragment_shader, buffer[:]) or_return
+    shader.id    = gl.CreateProgram()
 
-    shader.id = gl.CreateProgram()
+    compiled_shaders: [2]Handle
+    for &handle, i in compiled_shaders {
+        handle = shader_init(shader_names[i]) or_return
+        gl.AttachShader(shader.id, handle)
+    }
+
+    defer for handle in compiled_shaders {
+        gl.DeleteShader(handle)
+    }
 
     success: i32
-    gl.AttachShader(shader.id, vertex_shader)
-    gl.AttachShader(shader.id, fragment_shader)
     gl.LinkProgram(shader.id)
 
-
+    buffer: [256]u8
     gl.GetProgramiv(shader.id, gl.LINK_STATUS, &success);
     if bool(success) {
         when SHOW_SHADER_DIAGNOSTICS
@@ -130,8 +146,6 @@ shader_create :: proc(vertex_shader_path, fragment_shader_path: string) -> (shad
 
     ok = true
 
-    gl.DeleteShader(vertex_shader)
-    gl.DeleteShader(fragment_shader)
     return shader, ok
 }
 
@@ -195,20 +209,21 @@ shader_uniform_set_matrix4_f64 :: proc "contextless" (name: cstring, value: ^lin
 }
 
 shader_uniform_set_vec3 :: proc{
-    shader_uniform_set_vec3_f32, 
-    shader_uniform_set_vec3_f64 
+    shader_uniform_set_vec3_f32,
+    shader_uniform_set_vec3_f64,
 }
 
 shader_uniform_set_matrix4 :: proc{
     shader_uniform_set_matrix4_f32,
-    shader_uniform_set_matrix4_f64
+    shader_uniform_set_matrix4_f64,
 }
+
 shader_uniform_set :: proc
 {
     shader_uniform_set_int,
     shader_uniform_set_float,
     shader_uniform_set_vec3_f32,
     shader_uniform_set_vec3_f64,
-    shader_uniform_set_matrix4_f32, 
-    shader_uniform_set_matrix4_f64, 
+    shader_uniform_set_matrix4_f32,
+    shader_uniform_set_matrix4_f64,
 }
