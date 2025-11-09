@@ -7,6 +7,7 @@ import alg  "core:math/linalg"
 import      "core:log" 
 import      "core:os"
 import      "core:encoding/json"
+import      "core:strings"
 
 import      "vendor:glfw"
 import gl   "vendor:OpenGL"
@@ -470,20 +471,39 @@ main :: proc()
 
     imgui_data := load_imgui_data(imgui_data_filename, default_imgui_data)
 
+    point_light_positions := [?]Vector3{
+        { 0.7,  0.2,  2.0},
+        { 2.3, -3.3, -4.0},
+        {-4.0,  2.0, -12.0},
+        { 0.0,  0.0, -3.0}
+    }
+
     glw.shader_use(lighting_shader)
-    glw.shader_uniform_set_float("light.constant", 1)
-    glw.shader_uniform_set_float("light.linear", 0.09)
-    glw.shader_uniform_set_float("light.quadratic", 0.032)
+
+    glw.shader_uniform_set_float("point_lights[0].fade.constant", 1)
+    glw.shader_uniform_set_float("point_lights[0].fade.linear", 0.09)
+    glw.shader_uniform_set_float("point_lights[0].fade.quadratic", 0.032)
+    glw.shader_uniform_set_float("point_lights[1].fade.constant", 1)
+    glw.shader_uniform_set_float("point_lights[1].fade.linear", 0.09)
+    glw.shader_uniform_set_float("point_lights[1].fade.quadratic", 0.032)
+    glw.shader_uniform_set_float("point_lights[2].fade.constant", 1)
+    glw.shader_uniform_set_float("point_lights[2].fade.linear", 0.09)
+    glw.shader_uniform_set_float("point_lights[2].fade.quadratic", 0.032)
+    glw.shader_uniform_set_float("point_lights[3].fade.constant", 1)
+    glw.shader_uniform_set_float("point_lights[3].fade.linear", 0.09)
+    glw.shader_uniform_set_float("point_lights[3].fade.quadratic", 0.032)
+
+    glw.shader_uniform_set_float("spot_light.fade.constant", 1)
+    glw.shader_uniform_set_float("spot_light.fade.linear", 0.09)
+    glw.shader_uniform_set_float("spot_light.fade.quadratic", 0.032)
+
+    glw.shader_uniform_set_float("spot_light.cutoff",     math.cos(math.to_radians_f32(17.5)))
+    glw.shader_uniform_set_float("spot_light.outer_cutoff",     math.cos(math.to_radians_f32(20)))
 
     glw.shader_uniform_set_float("material.shininess", imgui_data.shininess)
     glw.shader_uniform_set("material.diffuse",  0)
     glw.shader_uniform_set("material.specular", 1)
 
-    glw.shader_uniform_set_vector3("light.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
-    glw.shader_uniform_set_vector3("light.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
-    glw.shader_uniform_set_vector3("light.specular", imgui_data.light_specular * imgui_data.light_color)
-    glw.shader_uniform_set_float("light.cutoff",     math.cos(math.to_radians_f32(17.5)))
-    glw.shader_uniform_set_float("light.outer_cutoff",     math.cos(math.to_radians_f32(20)))
 
     glw.shader_use(light_source_shader)
     glw.shader_uniform_set_vector3_f32("light_color", {1, 1 ,1})
@@ -535,6 +555,35 @@ main :: proc()
             gl.BindVertexArray(vao)
             glw.shader_use(lighting_shader)
 
+            glw.shader_uniform_set_vector3("directional_light.phong.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("directional_light.phong.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("directional_light.phong.specular", imgui_data.light_specular * imgui_data.light_color)
+
+            // Jesus christ
+            glw.shader_uniform_set_vector3("point_lights[0].phong.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[0].phong.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[0].phong.specular", imgui_data.light_specular * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[1].phong.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[1].phong.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[1].phong.specular", imgui_data.light_specular * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[2].phong.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[2].phong.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[2].phong.specular", imgui_data.light_specular * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[3].phong.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[3].phong.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("point_lights[3].phong.specular", imgui_data.light_specular * imgui_data.light_color)
+
+            glw.shader_uniform_set_vector3("spot_light.phong.ambient",  imgui_data.light_ambient  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("spot_light.phong.diffuse",  imgui_data.light_diffuse  * imgui_data.light_color)
+            glw.shader_uniform_set_vector3("spot_light.phong.specular", imgui_data.light_specular * imgui_data.light_color)
+
+            glw.shader_uniform_set_vector3("view_pos", global.camera.position)
+
+            glw.shader_uniform_set_vector3_f32("directional_light.direction",  -{1.0, 0.3, 0.5})
+
+            glw.shader_uniform_set_vector3("spot_light.position",  global.camera.position)
+            glw.shader_uniform_set_vector3("spot_light.direction", global.camera.direction)
+
             if imgui.Begin("Panel") {
                 if imgui.Button("Reset") {
                     imgui_data = default_imgui_data
@@ -550,16 +599,16 @@ main :: proc()
 
                 imgui.Spacing()
                 if imgui.ColorEdit3("Light color",    &imgui_data.light_color) {
-                    glw.shader_uniform_set_vector3_f32("light_color", imgui_data.light_color)
+                    // glw.shader_uniform_set_vector3_f32("light_color", imgui_data.light_color)
                 }
                 if imgui.ColorEdit3("Light ambient",  &imgui_data.light_ambient) {
-                    glw.shader_uniform_set_vector3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
+                    // glw.shader_uniform_set_vector3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
                 }
                 if imgui.ColorEdit3("Light diffuse",  &imgui_data.light_diffuse) {
-                    glw.shader_uniform_set_vector3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
+                    // glw.shader_uniform_set_vector3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
                 }
                 if imgui.ColorEdit3("Light specular", &imgui_data.light_specular) {
-                    glw.shader_uniform_set_vector3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
+                    // glw.shader_uniform_set_vector3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
                 }
 
                 imgui.Text("FPS: %.2f | Iterations Per Second: %d", imgui_io.Framerate, imgui_iteration_count)
@@ -598,10 +647,6 @@ main :: proc()
                 )
             }
 
-            glw.shader_uniform_set_vector3("view_pos",        global.camera.position)
-            glw.shader_uniform_set_vector3("light.position",  global.camera.position)
-            glw.shader_uniform_set_vector3("light.direction", global.camera.direction)
-
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
 
@@ -616,13 +661,19 @@ main :: proc()
                 )
             }
 
+            glw.shader_uniform_set_vector3_f32("point_lights[0].position", point_light_positions[0])
+            glw.shader_uniform_set_vector3_f32("point_lights[1].position", point_light_positions[1])
+            glw.shader_uniform_set_vector3_f32("point_lights[2].position", point_light_positions[2])
+            glw.shader_uniform_set_vector3_f32("point_lights[3].position", point_light_positions[3])
+
             gl.BindVertexArray(light_vao)
             glw.shader_use(light_source_shader)
 
             glw.shader_uniform_set("projection", &projection_mat)
             glw.shader_uniform_set("view",       &view_mat)
-
-            draw_cube(light_pos, 0.5)
+            for position in point_light_positions {
+                draw_cube(position, 0.5)
+            }
 
             // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
