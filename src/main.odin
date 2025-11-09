@@ -182,6 +182,16 @@ vector_lerp :: #force_inline proc "contextless" (vector1, vector2: $T/[$N]$E, t:
     )
 }
 
+draw_cube :: proc(position: Vector3, scale := Vector3(1), degrees: f32 = 0, rotation_axis := UP)
+{
+    model_mat := alg.MATRIX4F32_IDENTITY
+    model_mat *= alg.matrix4_translate_f32(position)
+    model_mat *= alg.matrix4_rotate_f32(degrees, rotation_axis)
+    model_mat *= alg.matrix4_scale_f32(scale)
+    glw.shader_uniform_set("model", &model_mat)
+    gl.DrawArrays(gl.TRIANGLES, 0, 36)
+}
+
 main :: proc() 
 {
     logger_options := log.Options {
@@ -232,7 +242,7 @@ main :: proc()
     glfw.SetScrollCallback(window_handle,          scroll_callback)
 
     gl.Viewport(0, 0, i32(global.viewport_size.width), i32(global.viewport_size.height))
-    gl.ClearColor(0.2, 0.3, 0.3, 1.0)
+    gl.ClearColor(0.1, 0.1, 0.1, 1.0)
 
     imgui.CHECKVERSION()
     imgui.CreateContext()
@@ -257,9 +267,6 @@ main :: proc()
         return
     }
     
-    glw.shader_use(lighting_shader)
-    glw.shader_uniform_set("material.diffuse",  0)
-    glw.shader_uniform_set("material.specular", 1)
     // glw.shader_uniform_set_vector3("object_color", {1, 0.5, 0.31})
     // glw.shader_uniform_set_vector3("light_color", light_color)
 
@@ -315,6 +322,19 @@ main :: proc()
          0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  1.0, 0.0,
         -0.5,  0.5,  0.5,  0.0,  1.0,  0.0,  0.0, 0.0,
         -0.5,  0.5, -0.5,  0.0,  1.0,  0.0,  0.0, 1.0
+    }
+
+    cube_positions := [?]Vector3{
+        { 0.0,  0.0,  0.0, },
+        { 2.0,  5.0, -15.0,},
+        {-1.5, -2.2, -2.5, },
+        {-3.8, -2.0, -12.3,},
+        { 2.4, -0.4, -3.5, },
+        {-1.7,  3.0, -7.5, },
+        { 1.3, -2.0, -2.5, },
+        { 1.5,  2.0, -2.5, },
+        { 1.5,  0.2, -1.5, },
+        {-1.3,  1.0, -1.5  },
     }
 
     vertex_indices := [?]u32{
@@ -428,10 +448,6 @@ main :: proc()
     }
     
     // model_mat = alg.MATRIX4F32_IDENTITY
-    draw_cube :: proc()
-    {
-        gl.DrawArrays(gl.TRIANGLES, 0, 36)
-    }
 
     seconds_accumulator: f64
     fps_accumulator:     f64
@@ -458,6 +474,22 @@ main :: proc()
     }
 
     imgui_data := load_imgui_data(imgui_data_filename, default_imgui_data)
+
+    glw.shader_use(lighting_shader)
+    glw.shader_uniform_set_float("light.constant", 1)
+    glw.shader_uniform_set_float("light.linear", 0.09)
+    glw.shader_uniform_set_float("light.quadratic", 0.032)
+
+    glw.shader_uniform_set_float("material.shininess", imgui_data.shininess)
+    glw.shader_uniform_set("material.diffuse",  0)
+    glw.shader_uniform_set("material.specular", 1)
+
+    glw.shader_uniform_set_vector3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
+    glw.shader_uniform_set_vector3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
+    glw.shader_uniform_set_vector3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
+
+    glw.shader_use(light_source_shader)
+    glw.shader_uniform_set_vector3_f32("light_color", {1, 1 ,1})
 
     light_pos = vector_lerp(
         light_pos,
@@ -503,6 +535,9 @@ main :: proc()
             imgui_glfw.NewFrame()
             imgui.NewFrame()
 
+            gl.BindVertexArray(vao)
+            glw.shader_use(lighting_shader)
+
             if imgui.Begin("Panel") {
                 if imgui.Button("Reset") {
                     imgui_data = default_imgui_data
@@ -513,13 +548,23 @@ main :: proc()
                 }
 
                 // imgui.ColorEdit3("Material specular", &imgui_data.material_specular)
-                imgui.SliderFloat("Shininess",        &imgui_data.shininess, 0, f32(u32(1) << 10))
+                if imgui.SliderFloat("Shininess",        &imgui_data.shininess, 0, f32(u32(1) << 10)) {
+                    glw.shader_uniform_set_float("material.shininess", imgui_data.shininess)
+                }
 
                 imgui.Spacing()
-                imgui.ColorEdit3("Light color",    &imgui_data.light_color)
-                imgui.ColorEdit3("Light ambient",  &imgui_data.light_ambient)
-                imgui.ColorEdit3("Light diffuse",  &imgui_data.light_diffuse)
-                imgui.ColorEdit3("Light specular", &imgui_data.light_specular)
+                if imgui.ColorEdit3("Light color",    &imgui_data.light_color) {
+                    glw.shader_uniform_set_vector3_f32("light_color", imgui_data.light_color)
+                }
+                if imgui.ColorEdit3("Light ambient",  &imgui_data.light_ambient) {
+                    glw.shader_uniform_set_vector3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
+                }
+                if imgui.ColorEdit3("Light diffuse",  &imgui_data.light_diffuse) {
+                    glw.shader_uniform_set_vector3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
+                }
+                if imgui.ColorEdit3("Light specular", &imgui_data.light_specular) {
+                    glw.shader_uniform_set_vector3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
+                }
 
                 // imgui.Text("FPS: %.2f | Iterations Per Second: %s", imgui_io.Framerate, cast(string)fmt_buffer[:])
                 imgui.Text("FPS: %.2f | Iterations Per Second: %d", imgui_io.Framerate, imgui_iteration_count)
@@ -546,42 +591,6 @@ main :: proc()
                 )
             }
 
-            glw.shader_use(lighting_shader)
-
-            // glw.shader_uniform_set_vector3("material.specular",imgui_data.material_specular)
-            glw.shader_uniform_set_float("material.shininess", imgui_data.shininess)
-
-            glw.shader_uniform_set_vector3("light.ambient",   imgui_data.light_ambient  * imgui_data.light_color)
-            glw.shader_uniform_set_vector3("light.diffuse",   imgui_data.light_diffuse  * imgui_data.light_color)
-            glw.shader_uniform_set_vector3("light.specular",  imgui_data.light_specular * imgui_data.light_color)
-
-
-            glw.shader_uniform_set("projection", &projection_mat)
-            glw.shader_uniform_set("view",       &view_mat)
-
-            model_mat = alg.MATRIX4F32_IDENTITY
-            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-            model_mat = alg.matrix4_translate_f32({2, 0, 2})   * model_mat
-            gl.BindVertexArray(vao)
-
-            glw.shader_uniform_set("model",      &model_mat)
-            glw.shader_uniform_set("camera_pos", global.camera.position)
-            glw.shader_uniform_set("light_pos",  light_pos)
-
-            draw_cube()
-
-            model_mat = alg.MATRIX4F32_IDENTITY
-            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-            model_mat = alg.matrix4_translate_f32({8, 0, 2})   * model_mat
-            glw.shader_uniform_set("model",      &model_mat)
-            draw_cube()
-
-            glw.shader_use(light_source_shader)
-            glw.shader_uniform_set_vector3_f32("light_color", imgui_data.light_color)
-
-            glw.shader_uniform_set("projection", &projection_mat)
-            glw.shader_uniform_set("view",       &view_mat)
-
             if key_pressed(glfw.KEY_F) {
                 cube_follow_camera = !cube_follow_camera
             }
@@ -594,13 +603,31 @@ main :: proc()
                 )
             }
 
-            model_mat = alg.MATRIX4F32_IDENTITY
-            model_mat = alg.matrix4_scale_f32({0.5, 0.5, 0.5}) * model_mat
-            model_mat = alg.matrix4_translate_f32(light_pos)   * model_mat
-            glw.shader_uniform_set("model",      &model_mat)
+            glw.shader_uniform_set_vector3("light_pos",       light_pos)
+
+            glw.shader_uniform_set("projection", &projection_mat)
+            glw.shader_uniform_set("view",       &view_mat)
+
+            // draw_cube({8, 0, 2})
+            for cube_positions, i in cube_positions {
+                angle := f32(i * 20)
+                draw_cube(
+                    cube_positions,
+                    scale         = 1,
+                    degrees       = math.to_radians(angle),
+                    rotation_axis = {1, 0.3, 0.5}
+                )
+            }
+
+            glw.shader_uniform_set("camera_pos", global.camera.position)
 
             gl.BindVertexArray(light_vao)
-            draw_cube()
+            glw.shader_use(light_source_shader)
+
+            glw.shader_uniform_set("projection", &projection_mat)
+            glw.shader_uniform_set("view",       &view_mat)
+
+            draw_cube(light_pos, 0.5)
 
             // gl.DrawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, nil)
 
@@ -640,7 +667,8 @@ main :: proc()
         }
     }
 
+    err := save_imgui_data(imgui_data_filename, imgui_data)
     when SHOW_DIAGNOSTICS {
-        fmt.printfln("Saving imgui_data... err: %v", save_imgui_data(imgui_data_filename, imgui_data))
+        fmt.printfln("Saving imgui_data... err: %v", err)
     }
 }

@@ -7,7 +7,7 @@ vars:
     "
     -define:print_fps=false
     -define:show_diagnostics=false
-    -define:shader_diagnostics=false
+    -define:shader_diagnostics=true
     -o:none
     "
 
