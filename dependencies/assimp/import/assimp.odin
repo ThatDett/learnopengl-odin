@@ -19,8 +19,8 @@ foreign assimp {
 	@(link_name = "aiGetErrorString")
 	get_error_string :: proc() -> cstring ---
 
-	@(link_name = "aiImportFile")
-	import_file :: proc(file: cstring, postprocessFlags: u32) -> ^aiScene ---
+	// @(link_name = "aiImportFile")
+	// import_file :: proc(file: cstring, postprocessFlags: u32) -> ^aiScene ---
 	// --------------------------------------------------------------------------------
 	/** Reads the given file from a given memory buffer,
      *

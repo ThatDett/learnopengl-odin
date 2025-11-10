@@ -16,20 +16,53 @@ TODO:
 
 import "core:math/linalg"
 import "core:strings"
+import "core:dynlib"
+import "core:fmt"
 import ai "import"
 
+@(private)
+aiImportFile: rawptr
 
-import_file :: proc {
-	import_file_from_memory,
-	import_file_from_file,
+@(private)
+aiGetErrorString: rawptr
+
+ImportFile :: #force_inline proc "c" (file: cstring, post_process_flags: u32) -> ^Scene
+{
+    Type :: #type proc "c" (cstring, u32) -> ^Scene
+    return Type(aiImportFile)(file, post_process_flags)
 }
+
+GetErrorString :: #force_inline proc "c" () -> cstring
+{
+    Type :: #type proc "c" () -> cstring
+    return Type(aiGetErrorString)()
+}
+
+Load_DLL :: proc() -> (ok: bool)
+{
+    assimp_dll: dynlib.Library
+    assimp_dll, ok  = dynlib.load_library("dependencies/assimp/lib/assimp-vc143-mt.dll")
+    if !ok {
+        fmt.eprintln("Couldn't load library")
+        return
+    }
+
+    aiImportFile     = dynlib.symbol_address(assimp_dll, "aiImportFile")     or_return
+    aiGetErrorString = dynlib.symbol_address(assimp_dll, "aiGetErrorString") or_return
+    return true
+}
+
+// import_file :: proc {
+// 	import_file_from_memory,
+// 	import_file_from_file,
+// }
 
 // assimp procs
 get_error_string :: ai.get_error_string
 
 import_file_from_file :: proc(file: string, postprocess_flags: u32) -> ^Scene {
 	file_cstr := strings.clone_to_cstring(file, context.temp_allocator)
-	return ai.import_file(file_cstr, postprocess_flags)
+	return ImportFile(file_cstr, postprocess_flags)
 }
 import_file_from_memory :: proc(
 	buffer: []byte,

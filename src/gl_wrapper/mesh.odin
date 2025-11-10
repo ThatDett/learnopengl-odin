@@ -139,12 +139,27 @@ mesh_process :: proc(mesh: ^assimp.Mesh, scene: ^assimp.Scene) -> (out_mesh: Mes
 
     if mesh.mMaterialIndex >= 0 {
         material := scene.mMaterials[mesh.mMaterialIndex]
-        diffuse_maps  := load_material_textures(material, .DIFFUSE,  "texture_diffuse")
-        specular_maps := load_material_textures(material, .SPECULAR, "texture_specular")
+        diffuse_maps  := load_material_textures(material, assimp.TextureType.DIFFUSE,  "texture_diffuse")
+        specular_maps := load_material_textures(material, assimp.TextureType.SPECULAR, "texture_specular")
+        defer {
+            delete(diffuse_maps)
+            delete(specular_maps)
+        }
 
-        
+        for diffuse_map in diffuse_maps {
+            append(&out_mesh.textures, diffuse_map)
+        }
+
+        for specular_map in specular_maps {
+            append(&out_mesh.textures, specular_map)
+        }
     }
     return out_mesh
+}
+
+load_material_textures :: proc(material: ^assimp.Material, texture_type: assimp.TextureType, name: string) -> [dynamic]Texture
+{
+    return {}
 }
 
 mesh_delete :: proc(mesh: ^Mesh)

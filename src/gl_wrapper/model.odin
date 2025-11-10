@@ -5,25 +5,30 @@ import "core:path/filepath"
 
 import gl "vendor:OpenGL"
 
-import "dependencies:assimp/assimp/include/assimp/assimp"
+import "dependencies:assimp"
+
+Model :: struct
+{
+    meshes:    [dynamic]Mesh,
+    directory: string
+}
+
+assimp_load :: #force_inline proc()
+{
+    assimp.Load_DLL()
+}
 
 model_load :: proc(path: cstring, caller_location := #caller_location) -> (model: Model, ok: bool)
 {
-    assimp.aiMaterial
-    if !assimp_is_dll_loaded {
-        assimp_load_DLL() or_return
-        assimp_is_dll_loaded = true
-    }
-
-    scene := assimp_ImportFile(path, assimp.aiPostProcessSteps.Triangulate | assimp.aiPostProcessSteps.FlipUVs)
-    if scene == nil || bool(scene.mFlags & assimp.AI_SCENE_FLAGS_INCOMPLETE) || scene.mRootNode == nil {
+    scene := assimp.ImportFile(path, u32(assimp.PostProcessSteps.Triangulate | assimp.PostProcessSteps.FlipUVs))
+    if scene == nil || bool(scene.mFlags & cast(u32)assimp.SceneFlags.INCOMPLETE) || scene.mRootNode == nil {
         fmt.eprintln("Error loading model: ", assimp.GetErrorString())
         return
     }
 
     model.directory = filepath.dir(cast(string)path)
 
-    node_process(&model, scene.mRootNode, scene);
+    // node_process(&model, scene.mRootNode, scene);
     return model, ok
 }
 

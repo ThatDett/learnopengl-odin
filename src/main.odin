@@ -269,9 +269,10 @@ main :: proc()
     light_source_shader, ok  = glw.shader_create("white")
     light_pos               := Vector3{}
 
-    // assimp.Load()
+    glw.assimp_load()
 
-    // thing := assimp.ImportFile("res/models/survival_guitar_backpack.glb", assimp.Process_Triangulate | assimp.Process_FlipUVs)
+    model: glw.Model = ---
+    model, ok = glw.model_load("res/models/survival_guitar_backpack.glb")
     // fmt.println(thing^)
     vertices := [?]f32{
         // positions       // normals        // texture coords

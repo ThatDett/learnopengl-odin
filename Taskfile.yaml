@@ -10,6 +10,7 @@ vars:
     -define:shader_diagnostics=true
     -o:none
     -collection:dependencies=dependencies
+    -extra-linker-flags:dependencies/assimp/lib/assimp-vc143-mt.lib
     "
 
   build_command: "build src -out:bin/out.exe {{.flags}}" 
