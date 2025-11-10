@@ -17,21 +17,22 @@ Texture :: struct
 {
     id:    Handle,
     index: Texture_Index,
+    type:  string,
 }
 
-load_image :: proc(filepath: cstring) -> (image: Image, ok: bool)
+load_image :: #force_inline proc "contextless" (filepath: cstring) -> (image: Image, ok: bool)
 {
     image.data = stbi.load(filepath, &image.width, &image.height, &image.number_of_channels, 0)
     if image.data == nil {
         // fmt.eprintfln("Could not load %v", filepath)
-        return {}, ok
+        return image, ok
     }
 
     ok = true
     return image, ok
 }
 
-create_texture :: proc(image: Image, texture_index: Texture_Index, setup := proc() {
+create_texture :: proc "contextless" (image: Image, texture_index: Texture_Index, setup := proc "contextless" () {
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.MIRRORED_REPEAT);

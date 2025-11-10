@@ -168,6 +168,14 @@ shader_uniform_set_int :: #force_inline proc "contextless" (name: cstring, value
     return ok
 }
 
+shader_uniform_set_uint :: #force_inline proc "contextless" (name: cstring, value: u32) -> (ok: bool)
+{
+    uniform_location := gl.GetUniformLocation(current_shader.id, name)
+    ok                = uniform_location != -1
+    gl.Uniform1ui(uniform_location, value)
+    return ok
+}
+
 shader_uniform_set_float :: #force_inline proc "contextless" (name: cstring, value: f32) -> (ok: bool)
 {
     uniform_location := gl.GetUniformLocation(current_shader.id, name)

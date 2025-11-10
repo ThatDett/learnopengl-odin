@@ -17,10 +17,8 @@ import glw        "gl_wrapper"
 import            "dependencies:imgui"
 import imgui_gl   "dependencies:imgui/imgui_impl_opengl3"
 import imgui_glfw "dependencies:imgui/imgui_impl_glfw"
-// import imgui      "external/odin-imgui"
-// import imgui_gl   "external/odin-imgui/impl/opengl"
-// import imgui_glfw "external/odin-imgui/impl/glfw"
 
+import "dependencies:assimp"
 
 /////////////// - Enums - ///////////////
 Key_State :: enum u8
@@ -195,12 +193,12 @@ draw_cube :: proc(position: Vector3, scale := Vector3(1), degrees: f32 = 0, rota
 
 main :: proc() 
 {
-    logger_options := log.Options {
-        .Level,
-        .Line,
-        .Procedure
-    }
-    context.logger = log.create_console_logger(opt = logger_options)
+    // logger_options := log.Options {
+    //     .Level,
+    //     .Line,
+    //     .Procedure
+    // }
+    // context.logger = log.create_console_logger(opt = logger_options)
 
     if !bool(glfw.Init()) {
         desc, error := glfw.GetError()
@@ -267,19 +265,14 @@ main :: proc()
     if !ok {
         return
     }
-    
-    // glw.shader_uniform_set_vector3("object_color", {1, 0.5, 0.31})
-    // glw.shader_uniform_set_vector3("light_color", light_color)
-
-    // glw.shader_uniform_set_vector3_f32( "material.ambient",   {1,   0.5, 0.31})
-    // glw.shader_uniform_set_vector3_f32( "material.diffuse",   {1,   0.5, 0.31})
-    // glw.shader_uniform_set_vector3_f32( "material.specular",  {0.5, 0.5, 0.50})
-    // glw.shader_uniform_set_float("material.shininess", 32)
-    // glw.shader_uniform_set_vector3_f32("light.specular",  {1.0, 1.0, 1.0})
 
     light_source_shader, ok  = glw.shader_create("white")
     light_pos               := Vector3{}
 
+    // assimp.Load()
+
+    // thing := assimp.ImportFile("res/models/survival_guitar_backpack.glb", assimp.Process_Triangulate | assimp.Process_FlipUVs)
+    // fmt.println(thing^)
     vertices := [?]f32{
         // positions       // normals        // texture coords
         -0.5, -0.5, -0.5,  0.0,  0.0, -1.0,  0.0, 0.0,
@@ -359,22 +352,10 @@ main :: proc()
         return
     }
 
+    // fmt.println(offset_of_by_string(glw.Vertex, "position"))
+    // fmt.println(offset_of_by_string(glw.Vertex, "normal"))
+    // fmt.println(offset_of_by_string(glw.Vertex, "texture_coord"))
     // defer stbi.image_free(data) // Leaking is fine, let OS clean stuff
-
-    // gl.GenTextures(1, &texture)
-    // gl.ActiveTexture(gl.TEXTURE1)
-    // gl.BindTexture(gl.TEXTURE_2D, texture)
-    //
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S,     gl.REPEAT);
-    // gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T,     gl.REPEAT);
-    //
-    // gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGB, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data)
-    // gl.GenerateMipmap(gl.TEXTURE_2D)
-    //
-    // glw.shader_uniform_set(lighting_shader, "texture1", 0)
-    // glw.shader_uniform_set(lighting_shader, "texture2", 1)
 
     light_vao, vao, vbo, ebo: glw.Handle = ---, ---, ---, ---
     gl.GenVertexArrays(1, &light_vao)
@@ -480,6 +461,7 @@ main :: proc()
 
     glw.shader_use(lighting_shader)
 
+    //TODO: Use loop + formatting instead of hard-coding.
     glw.shader_uniform_set_float("point_lights[0].fade.constant", 1)
     glw.shader_uniform_set_float("point_lights[0].fade.linear", 0.09)
     glw.shader_uniform_set_float("point_lights[0].fade.quadratic", 0.032)
@@ -661,6 +643,7 @@ main :: proc()
                 )
             }
 
+            point_light_positions[0] = light_pos
             glw.shader_uniform_set_vector3_f32("point_lights[0].position", point_light_positions[0])
             glw.shader_uniform_set_vector3_f32("point_lights[1].position", point_light_positions[1])
             glw.shader_uniform_set_vector3_f32("point_lights[2].position", point_light_positions[2])
